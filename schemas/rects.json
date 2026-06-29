@@ -1,0 +1,14 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/rects.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rects",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","type","rev","rects"],
+  "properties": {
+    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/rects.json" },
+    "type": { "const": "rects" },
+    "rev": { "type": "integer" },
+    "rects": { "type": "object", "additionalProperties": { "$ref": "_defs.json#/$defs/Rect" } }
+  }
+}

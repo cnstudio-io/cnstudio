@@ -1,0 +1,13 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/drop.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "drop",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","type","rev"],
+  "properties": {
+    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/drop.json" },
+    "type": { "const": "drop" },
+    "rev": { "type": "integer" }
+  }
+}

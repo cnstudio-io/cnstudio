@@ -1,0 +1,14 @@
+{
+  "components": {
+    "Button": {
+      "import": { "module": "@/components/ui/button", "name": "Button" },
+      "displayName": "Button",
+      "props": {
+        "variant": { "type": "enum", "options": ["default", "destructive", "outline", "secondary", "ghost", "link"], "default": "default" },
+        "size": { "type": "enum", "options": ["default", "xs", "sm", "lg", "icon"], "default": "default" },
+        "asChild": { "type": "boolean", "default": false },
+        "children": { "type": "slot" }
+      }
+    }
+  }
+}

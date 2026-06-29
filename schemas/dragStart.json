@@ -1,0 +1,14 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/dragStart.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "dragStart",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","type","rev","path"],
+  "properties": {
+    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/dragStart.json" },
+    "type": { "const": "dragStart" },
+    "rev": { "type": "integer" },
+    "path": { "$ref": "_defs.json#/$defs/NodePath" }
+  }
+}

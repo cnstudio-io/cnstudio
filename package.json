@@ -1,0 +1,64 @@
+{
+  "name": "cnstudio",
+  "version": "0.0.0",
+  "description": "Vite plugin + runtime that turns a real React/Tailwind project into a canvas the Studio extension can edit. Generates component registrations from source; renders the design model with the project's real components.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": false,
+  "bin": {
+    "cnstudio": "./dist/generate/cli.js"
+  },
+  "exports": {
+    "./vite": "./dist/vite/index.js",
+    "./react": "./dist/react/main.js",
+    "./react.css": "./dist/react/main.css",
+    "./generate": "./dist/generate/index.js",
+    "./codegen": "./dist/generate/codegen.js",
+    "./react-web": "./dist/react/react-web.js",
+    "./vscode": "./dist/vscode/index.js",
+    "./engine": "./dist/engine/index.js",
+    "./schemas/*": "./schemas/*"
+  },
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "scripts": {
+    "build": "node esbuild.mjs --production && npm run build:types",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly",
+    "dev": "node esbuild.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "react-dom": "^19",
+    "vite": "^6 || ^7 || ^8"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@babel/parser": "^7.25.0",
+    "@babel/traverse": "^7.25.0",
+    "ejs": "^6.0.1",
+    "react-docgen-typescript": "^2.2.2",
+    "tinyglobby": "^0.2.10"
+  },
+  "devDependencies": {
+    "@types/babel__traverse": "^7.20.6",
+    "@types/ejs": "^3.1.5",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "esbuild": "^0.25.0",
+    "jsdom": "^25.0.0",
+    "react": "^19",
+    "react-dom": "^19",
+    "typescript": "~6.0.0",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
+  }
+}

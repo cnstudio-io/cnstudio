@@ -1,0 +1,18 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/pointer.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pointer",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","type","rev","phase","path","x","y","button"],
+  "properties": {
+    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/pointer.json" },
+    "type": { "const": "pointer" },
+    "rev": { "type": "integer" },
+    "phase": { "enum": ["down","move","up"] },
+    "path": { "oneOf": [ { "$ref": "_defs.json#/$defs/NodePath" }, { "type": "null" } ] },
+    "x": { "type": "number" },
+    "y": { "type": "number" },
+    "button": { "type": "integer" }
+  }
+}

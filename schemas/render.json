@@ -1,0 +1,23 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/render.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "render",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","type","rev","modelRev","siteJson","componentName","activeVariant","selection","hover","editingPath","dropIndicator","players","interactive"],
+  "properties": {
+    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/render.json" },
+    "type": { "const": "render" },
+    "rev": { "type": "integer" },
+    "modelRev": { "type": "integer" },
+    "siteJson": {},
+    "componentName": { "type": "string" },
+    "activeVariant": { "oneOf": [ { "type": "string" }, { "type": "null" } ] },
+    "selection": { "oneOf": [ { "$ref": "_defs.json#/$defs/NodePath" }, { "type": "null" } ] },
+    "hover": { "oneOf": [ { "$ref": "_defs.json#/$defs/NodePath" }, { "type": "null" } ] },
+    "editingPath": { "oneOf": [ { "$ref": "_defs.json#/$defs/NodePath" }, { "type": "null" } ] },
+    "dropIndicator": { "oneOf": [ { "$ref": "_defs.json#/$defs/DropIndicator" }, { "type": "null" } ] },
+    "players": { "type": "array", "items": { "$ref": "_defs.json#/$defs/RemotePresence" } },
+    "interactive": { "type": "boolean" }
+  }
+}

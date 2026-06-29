@@ -1,0 +1,59 @@
+/* Canvas-host bundle styles. This is the iframe's own document — its CSS is fully
+   isolated from the studio shell. The iframe IS the white artboard (the canvas tab
+   provides the grey backdrop + zoom/pan transform), and the document sizes to its
+   content so the tab can measure it (the `rendered` height) and scale it. */
+html,
+body {
+  margin: 0;
+  background: #fff;
+}
+body {
+  font: 14px/1.4 system-ui, -apple-system, sans-serif;
+  color: #1f2328;
+}
+.host-stage {
+  position: relative;
+}
+.__studio_root [data-spath] {
+  cursor: default;
+}
+/* inline text editing (double-click a text node) */
+.__studio_root [contenteditable="true"] {
+  outline: 2px solid #1f6feb;
+  outline-offset: 1px;
+  cursor: text;
+  min-width: 8px;
+}
+
+/* selection / hover / drop overlays — drawn by the host (the studio can't reach in) */
+.sel-box {
+  position: absolute;
+  border: 2px solid #1f6feb;
+  border-radius: 2px;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+  z-index: 5;
+}
+.hover-box {
+  position: absolute;
+  border: 1px solid #54aeff;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 4;
+}
+.drop-inside {
+  position: absolute;
+  border: 2px dashed #1a7f37;
+  border-radius: 3px;
+  background: rgba(26, 127, 55, 0.06);
+  pointer-events: none;
+  z-index: 6;
+}
+.drop-line {
+  position: absolute;
+  height: 0;
+  border-top: 2px solid #1a7f37;
+  pointer-events: none;
+  z-index: 6;
+}
+

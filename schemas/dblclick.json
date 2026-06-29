@@ -1,0 +1,14 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/dblclick.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "dblclick",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","type","rev","path"],
+  "properties": {
+    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/dblclick.json" },
+    "type": { "const": "dblclick" },
+    "rev": { "type": "integer" },
+    "path": { "oneOf": [ { "$ref": "_defs.json#/$defs/NodePath" }, { "type": "null" } ] }
+  }
+}

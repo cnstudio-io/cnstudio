@@ -1,0 +1,32 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/_defs.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "NodePath": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+    "Rect": {
+      "type": "object",
+      "required": ["left", "top", "width", "height"],
+      "properties": {
+        "left": { "type": "number" }, "top": { "type": "number" },
+        "width": { "type": "number" }, "height": { "type": "number" }
+      }
+    },
+    "DropIndicator": {
+      "type": "object",
+      "required": ["path", "pos"],
+      "properties": {
+        "path": { "$ref": "_defs.json#/$defs/NodePath" },
+        "pos": { "enum": ["before", "after", "inside"] }
+      }
+    },
+    "RemotePresence": {
+      "type": "object",
+      "required": ["id", "name", "color", "cursor", "selection"],
+      "properties": {
+        "id": { "type": "string" }, "name": { "type": "string" }, "color": { "type": "string" },
+        "cursor": { "oneOf": [ { "type": "object", "required": ["x","y"], "properties": { "x": {"type":"number"}, "y": {"type":"number"} } }, { "type": "null" } ] },
+        "selection": { "oneOf": [ { "$ref": "_defs.json#/$defs/NodePath" }, { "type": "null" } ] }
+      }
+    }
+  }
+}

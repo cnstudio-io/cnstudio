@@ -1,0 +1,14 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/space.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "space",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","type","rev","down"],
+  "properties": {
+    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/space.json" },
+    "type": { "const": "space" },
+    "rev": { "type": "integer" },
+    "down": { "type": "boolean" }
+  }
+}

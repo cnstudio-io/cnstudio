@@ -1,0 +1,14 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/rendered.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rendered",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","type","rev","height"],
+  "properties": {
+    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/rendered.json" },
+    "type": { "const": "rendered" },
+    "rev": { "type": "integer" },
+    "height": { "type": "number" }
+  }
+}

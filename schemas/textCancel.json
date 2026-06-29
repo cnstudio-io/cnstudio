@@ -1,0 +1,13 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/textCancel.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "textCancel",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","type","rev"],
+  "properties": {
+    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/textCancel.json" },
+    "type": { "const": "textCancel" },
+    "rev": { "type": "integer" }
+  }
+}

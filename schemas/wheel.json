@@ -1,0 +1,16 @@
+{
+  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/wheel.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "wheel",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","type","rev","deltaX","deltaY","x","y","ctrl","shift"],
+  "properties": {
+    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/wheel.json" },
+    "type": { "const": "wheel" },
+    "rev": { "type": "integer" },
+    "deltaX": { "type": "number" }, "deltaY": { "type": "number" },
+    "x": { "type": "number" }, "y": { "type": "number" },
+    "ctrl": { "type": "boolean" }, "shift": { "type": "boolean" }
+  }
+}
