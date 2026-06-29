@@ -1,9 +1,18 @@
 name: Publish to npm
 
 on:
+  # Publish when a vX.Y.Z tag is pushed by a human.
   push:
     tags:
       - "v*"
+  # Called by tag.yml after it bumps + pushes the tag (same run, so no
+  # GITHUB_TOKEN cross-trigger restriction). `ref` is the tag to publish.
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref (tag) to check out and publish
+        required: false
+        type: string
   workflow_dispatch:
 
 jobs:
@@ -14,6 +23,8 @@ jobs:
       id-token: write # OIDC token for npm trusted publishing + provenance
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -25,9 +36,11 @@ jobs:
 
       - run: npm ci
 
-      # Fail fast if the tag (v1.2.3) doesn't match package.json's version.
+      # Fail fast if the publish ref is a vX.Y.Z tag that doesn't match
+      # package.json's version. (Skipped for workflow_call, where tag.yml has
+      # already set package.json to the tagged version.)
       - name: Verify tag matches package.json version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: ${{ inputs.ref == '' && startsWith(github.ref, 'refs/tags/v') }}
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           PKG="$(node -p "require('./package.json').version")"
