@@ -5,8 +5,14 @@
   "type": "module",
   "license": "Apache-2.0",
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cnstudio-io/cnstudio.git"
+  },
+  "homepage": "https://github.com/cnstudio-io/cnstudio#readme",
+  "bugs": "https://github.com/cnstudio-io/cnstudio/issues",
   "bin": {
-    "cnstudio": "./dist/generate/cli.js"
+    "cnstudio": "dist/generate/cli.js"
   },
   "exports": {
     "./vite": "./dist/vite/index.js",
