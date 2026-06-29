@@ -38,7 +38,7 @@ describe("web target", () => {
   });
 
   it("sources $ctx from useDataEnv (data binding, no state)", () => {
-    expect(file.content).toContain('import { useDataEnv } from "cnstudio/react-web";');
+    expect(file.content).toContain('import { useDataEnv } from "@cnstudio-io/cnstudio/react-web";');
     expect(file.content).toContain("const $ctx: Record<string, any> = useDataEnv();");
     expect(file.content).not.toContain("use$State");
   });
@@ -96,7 +96,7 @@ describe("variants", () => {
 
   it("emits applyVariant() driven by $props.activeVariant", () => {
     const [file] = web({ out: "./d" }).generate(variantSite, { root: "/x" });
-    expect(file.content).toContain('import { applyVariant } from "cnstudio/react-web";');
+    expect(file.content).toContain('import { applyVariant } from "@cnstudio-io/cnstudio/react-web";');
     expect(file.content).toContain(
       '{...applyVariant({ "className": \'box\' }, $props.activeVariant, { "active": { "className": \'box on\' } })}'
     );

@@ -1,6 +1,6 @@
 // studio.config.js — configures the cnstudio plugin + CLI. NO registration data
 // lives here (that is generated into .studio/registry.json). Copy into a project.
-import { web, android, ios } from "cnstudio/codegen";
+import { web, android, ios } from "@cnstudio-io/cnstudio/codegen";
 
 export default {
   // Component files to register (extract props from).

@@ -3,7 +3,7 @@ import type { Rect } from "./viewport";
 
 /**
  * The host ⇄ extension message contract. There is a JSON Schema FILE per message
- * under `cnstudio/schemas/` and every message carries a `schema` property that
+ * under `@cnstudio-io/cnstudio/schemas/` and every message carries a `schema` property that
  * LINKS to its own file (the `$schema` convention). These TS types mirror those
  * schemas — in the real build they are generated from them; here they are
  * hand-written so the draft is readable.
@@ -11,7 +11,7 @@ import type { Rect } from "./viewport";
  * NOTE: the version lives in the URL path (`/v1/`); bump it for any breaking change.
  */
 export const SCHEMA_BASE =
-  "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1";
+  "https://raw.githubusercontent.com/general-intelligence-systems/@cnstudio-io/cnstudio/main/schemas/v1";
 
 /** Every message type → the URL of its schema file. */
 export type MsgType =

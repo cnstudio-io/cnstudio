@@ -14,7 +14,7 @@ import type { ImportSpec, RegistryFile } from "../engine/schema";
  * targets built by the platform factories:
  *
  * ```js
- * import { web, android, ios } from "cnstudio/codegen";
+ * import { web, android, ios } from "@cnstudio-io/cnstudio/codegen";
  * export default {
  *   codegen: [
  *     web({ out: "./dist" }),
@@ -31,7 +31,7 @@ import type { ImportSpec, RegistryFile } from "../engine/schema";
  *
  * The output is thin component SOURCE that the consuming app compiles. It
  * delegates the few things that must match the canvas runtime
- * (`$state`, variant merge) to `cnstudio/react-web`, while emitting the tree, the
+ * (`$state`, variant merge) to `@cnstudio-io/cnstudio/react-web`, while emitting the tree, the
  * expressions, and the imports as plain source. `web` emits React for the DOM;
  * `android`/`ios` emit React Native (compiled by a React Native app).
  */
@@ -48,7 +48,7 @@ export interface CodegenTargetOptions {
    *     `<%= hole %>` tags, or
    *   - a `(parts) => string` function.
    * Defaults to the built-in per-platform template at
-   * `cnstudio/src/generators/<platform>/template.tsx.tt`. The DO-NOT-EDIT
+   * `@cnstudio-io/cnstudio/src/generators/<platform>/template.tsx.tt`. The DO-NOT-EDIT
    * {@link BANNER} is always prepended afterwards, regardless of template.
    */
   template?: string | TemplateFn;
@@ -123,7 +123,7 @@ export interface CodegenTarget {
 
 // The platform factories (`web`, `android`, `ios`) live in their own generator
 // dirs alongside their templates — `src/generators/<platform>/index.ts` — and are
-// re-exported at the bottom of this file so `cnstudio/codegen` stays the single
+// re-exported at the bottom of this file so `@cnstudio-io/cnstudio/codegen` stays the single
 // import path. Each calls {@link makeFiles} with its {@link Platform}.
 
 /**
@@ -294,7 +294,7 @@ function resolveTemplate(
   if (typeof template === "function") return template;
   const path = template
     ? resolve(root, template)
-    : // Built-ins live at cnstudio/src/generators/<platform>/template.tsx.tt and
+    : // Built-ins live at @cnstudio-io/cnstudio/src/generators/<platform>/template.tsx.tt and
       // are copied to dist/generators/… by the build; the path mirrors in both
       // (src/generate ↔ dist/generate are each one level above generators).
       new URL(`../generators/${platform}/template.tsx.tt`, import.meta.url);
@@ -326,7 +326,7 @@ function compileTemplate(src: string): TemplateFn {
 /**
  * Compute the holes for one component. cnstudio does data binding, not state:
  * expressions are inlined as source with the `$` env (`$props`/`$ctx`) in scope,
- * `$ctx` sourced from `cnstudio/react-web`'s `useDataEnv()`. Only the bindings
+ * `$ctx` sourced from `@cnstudio-io/cnstudio/react-web`'s `useDataEnv()`. Only the bindings
  * actually referenced are declared, so the output passes a strict (noUnused*)
  * typecheck in the consuming app.
  */
@@ -357,7 +357,7 @@ function computeParts(comp: Component, ctx: Ctx): ComponentParts {
   const rt: string[] = [];
   if (needsCtx) rt.push("useDataEnv");
   if (meta.hasVariants) rt.push("applyVariant");
-  if (rt.length) imports += `import { ${rt.sort().join(", ")} } from "cnstudio/react-web";\n`;
+  if (rt.length) imports += `import { ${rt.sort().join(", ")} } from "@cnstudio-io/cnstudio/react-web";\n`;
   if (imports) imports += "\n"; // blank line before the component, baked into the hole
 
   // —— signature + `$` bindings ——
@@ -534,7 +534,7 @@ function escapeJsxText(text: string): string {
 
 // ——— platform factories ———
 // Defined in their own generator dirs (alongside each template.tsx.tt) and
-// re-exported so `cnstudio/codegen` is the single public import path.
+// re-exported so `@cnstudio-io/cnstudio/codegen` is the single public import path.
 export { web } from "../generators/web";
 export { android } from "../generators/android";
 export { ios } from "../generators/ios";

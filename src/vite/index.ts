@@ -79,7 +79,7 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
     apply: "serve",
     enforce: "pre",
 
-    // The canvas host (cnstudio/react) is served from the cnstudio package via
+    // The canvas host (@cnstudio-io/cnstudio/react) is served from the cnstudio package via
     // @fs, so without deduping it resolves its OWN react while the project's
     // components resolve the project's — two React copies → "Invalid hook call".
     config() {
@@ -133,7 +133,7 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
       // then the auto-mounting runtime.
       if (id === resolved(V_ENTRY)) {
         const css = options.css ? `import ${JSON.stringify(options.css)};\n` : "";
-        return `${css}import "cnstudio/react.css";\nimport "cnstudio/react";\n`;
+        return `${css}import "@cnstudio-io/cnstudio/react.css";\nimport "@cnstudio-io/cnstudio/react";\n`;
       }
     },
 

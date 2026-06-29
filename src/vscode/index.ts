@@ -1,14 +1,14 @@
 /**
- * `cnstudio/vscode` — the typed API for driving the cnstudio VS Code extension.
+ * `@cnstudio-io/cnstudio/vscode` — the typed API for driving the cnstudio VS Code extension.
  *
- *   import { getStudioApi } from "cnstudio/vscode";
+ *   import { getStudioApi } from "@cnstudio-io/cnstudio/vscode";
  *   const studio = await getStudioApi(vscode.extensions); // the live StudioCtx
  *   studio?.change((tx) => { ... });
  *
  * The contract is organized to mirror `cnstudio-extension/src`: the `StudioCtx`
  * trunk + its manager namespaces under `./StudioCtx`, plus `./ViewCtx`,
  * `./CanvasCtx`, `./RenderTree`, `./Transaction`, `./events`. See
- * `cnstudio/examples/vscode-extension.ts`.
+ * `@cnstudio-io/cnstudio/examples/vscode-extension.ts`.
  */
 export * from "./StudioCtx";
 export * from "./ViewCtx";

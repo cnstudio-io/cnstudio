@@ -1,13 +1,13 @@
 /**
  * cnstudio integration example — how ANOTHER VS Code extension drives the
- * cnstudio Studio extension through the typed `cnstudio/vscode` API.
+ * cnstudio Studio extension through the typed `@cnstudio-io/cnstudio/vscode` API.
  *
  * `getStudioApi` returns the live `StudioCtx` — the whole engine — so you can do
  * anything the Studio can: read the model, run tracked changes, register code
  * components, undo/redo, switch arenas, and so on.
  */
 import * as vscode from "vscode";
-import { getStudioApi, type StudioCtx } from "cnstudio/vscode";
+import { getStudioApi, type StudioCtx } from "@cnstudio-io/cnstudio/vscode";
 
 let studio: StudioCtx | null = null;
 

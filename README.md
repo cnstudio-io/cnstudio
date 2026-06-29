@@ -29,7 +29,7 @@ src/
 
 examples/
   registry.json          a generated registry, for reference
-  vscode-extension.ts    a consumer extension using cnstudio/vscode
+  vscode-extension.ts    a consumer extension using @cnstudio-io/cnstudio/vscode
 
 studio.config.example.js   plugin config (copied into each project as studio.config.js)
 ```
@@ -62,14 +62,14 @@ links to its actual `.json` schema file** (the `$schema` convention, like shadcn
 The plugin turns the same file's `import` specifiers into a **virtual module** that
 gives the runtime the real component implementations to render.
 
-## Extending the extension (`cnstudio/vscode`)
+## Extending the extension (`@cnstudio-io/cnstudio/vscode`)
 
 The extension hands back the **live `StudioCtx`** — the whole engine — so another
 extension can drive everything the Studio does: the model, tracked `change(tx => …)`
 edits, `arenas`, `focus`, `history`, `insert`, `data`, `codeComponents`, and more.
 
 ```ts
-import { getStudioApi } from "cnstudio/vscode";
+import { getStudioApi } from "@cnstudio-io/cnstudio/vscode";
 
 const studio = await getStudioApi(vscode.extensions); // finds + activates → StudioCtx
 const names = studio?.model.site.components.map((c) => c.name);
@@ -77,7 +77,7 @@ studio?.codeComponents.register("Chart", { kind: "line" });
 studio?.change((tx) => { /* tx.insertChild / tx.setProp / … */ });
 ```
 
-`cnstudio/vscode` re-exports the engine types (`StudioCtx` and its namespace managers,
+`@cnstudio-io/cnstudio/vscode` re-exports the engine types (`StudioCtx` and its namespace managers,
 `Site`/`Node`, `Tx`, `ComponentMeta`/`PropSchema`), so consumers get a fully-typed
 handle. The extension returns `{ studio }` from its `activate()` — see
 `examples/vscode-extension.ts`.

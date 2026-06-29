@@ -8,7 +8,7 @@ import { effectiveProps as engineEffectiveProps, type Node } from "../engine/mod
  * manage state; a generated component binds to `$props`/`$ctx`, and any state is
  * the app's own (user-authored) component.
  *
- * A separate entry point from `cnstudio/react` (the canvas iframe host) — they
+ * A separate entry point from `@cnstudio-io/cnstudio/react` (the canvas iframe host) — they
  * share the `src/react/` directory but build as distinct bundles, so generated
  * code importing this doesn't pull in the host / protocol / DOM-mount machinery.
  */
