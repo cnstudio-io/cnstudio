@@ -1,0 +1,37 @@
+name: Tag release
+
+# Manually pick a version; this sets package.json to it and pushes a matching
+# `vX.Y.Z` tag. The tag push triggers publish.yml, which publishes to npm.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.1.2 or v0.1.2)"
+        required: true
+        type: string
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the commit + tag
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version and tag
+        run: |
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}" # accept either "0.1.2" or "v0.1.2"
+          npm version "$VERSION" --allow-same-version -m "Release v%s"
+          git push --follow-tags origin HEAD
