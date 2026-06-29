@@ -1,30 +1,32 @@
 name: Publish to npm
 
+# One workflow, two ways in:
+#   • Run it manually with a `version` -> bump package.json, tag, and publish.
+#   • Run it with no `version` (or push a vX.Y.Z tag) -> just publish the
+#     current version.
+# The entry workflow is always this file, so npm's trusted publisher stays
+# configured for publish.yml in both cases.
 on:
-  # Publish when a vX.Y.Z tag is pushed by a human.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Optional: version to bump+tag before publishing (e.g. 0.1.4). Leave blank to publish the current version."
+        required: false
+        type: string
   push:
     tags:
       - "v*"
-  # Called by tag.yml after it bumps + pushes the tag (same run, so no
-  # GITHUB_TOKEN cross-trigger restriction). `ref` is the tag to publish.
-  workflow_call:
-    inputs:
-      ref:
-        description: Git ref (tag) to check out and publish
-        required: false
-        type: string
-  workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # push the bump commit + tag (version path)
       id-token: write # OIDC token for npm trusted publishing + provenance
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -34,13 +36,20 @@ jobs:
       # Trusted publishing (OIDC) requires npm >= 11.5.1
       - run: npm install -g npm@latest
 
-      - run: npm ci
+      # version given -> set package.json to it, commit, and push a matching tag.
+      - name: Bump version and tag
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.version != '' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}" # accept either "0.1.4" or "v0.1.4"
+          npm version "$VERSION" --allow-same-version -m "Release v%s"
+          git push --follow-tags origin HEAD
 
-      # Fail fast if the publish ref is a vX.Y.Z tag that doesn't match
-      # package.json's version. (Skipped for workflow_call, where tag.yml has
-      # already set package.json to the tagged version.)
+      # Tag-push path: make sure the tag matches package.json before publishing.
       - name: Verify tag matches package.json version
-        if: ${{ inputs.ref == '' && startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ github.event_name == 'push' }}
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           PKG="$(node -p "require('./package.json').version")"
@@ -48,6 +57,8 @@ jobs:
             echo "::error::tag v$TAG does not match package.json version $PKG"
             exit 1
           fi
+
+      - run: npm ci
 
       - run: npm test
 
