@@ -1,5 +1,5 @@
 {
-  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/_defs.json",
+  "$id": "https://raw.githubusercontent.com/cnstudio-io/cnstudio/main/schemas/v1/_defs.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
     "NodePath": { "type": "array", "items": { "type": "integer", "minimum": 0 } },

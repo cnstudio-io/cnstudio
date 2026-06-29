@@ -11,7 +11,7 @@ import type { Rect } from "./viewport";
  * NOTE: the version lives in the URL path (`/v1/`); bump it for any breaking change.
  */
 export const SCHEMA_BASE =
-  "https://raw.githubusercontent.com/general-intelligence-systems/@cnstudio-io/cnstudio/main/schemas/v1";
+  "https://raw.githubusercontent.com/cnstudio-io/cnstudio/main/schemas/v1";
 
 /** Every message type → the URL of its schema file. */
 export type MsgType =

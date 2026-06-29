@@ -41,7 +41,7 @@ links to its actual `.json` schema file** (the `$schema` convention, like shadcn
 `components.json` → `"$schema": "https://ui.shadcn.com/schema.json"`):
 
 ```json
-{ "schema": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/render.json",
+{ "schema": "https://raw.githubusercontent.com/cnstudio-io/cnstudio/main/schemas/v1/render.json",
   "type": "render", "rev": 12 }
 ```
 

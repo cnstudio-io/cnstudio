@@ -1,12 +1,12 @@
 {
-  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/click.json",
+  "$id": "https://raw.githubusercontent.com/cnstudio-io/cnstudio/main/schemas/v1/click.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "click",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema","type","rev","path"],
   "properties": {
-    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/click.json" },
+    "schema": { "const": "https://raw.githubusercontent.com/cnstudio-io/cnstudio/main/schemas/v1/click.json" },
     "type": { "const": "click" },
     "rev": { "type": "integer" },
     "path": { "oneOf": [ { "$ref": "_defs.json#/$defs/NodePath" }, { "type": "null" } ] }

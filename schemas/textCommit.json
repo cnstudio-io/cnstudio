@@ -1,12 +1,12 @@
 {
-  "$id": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/textCommit.json",
+  "$id": "https://raw.githubusercontent.com/cnstudio-io/cnstudio/main/schemas/v1/textCommit.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "textCommit",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema","type","rev","path","value"],
   "properties": {
-    "schema": { "const": "https://raw.githubusercontent.com/general-intelligence-systems/cnstudio/main/schemas/v1/textCommit.json" },
+    "schema": { "const": "https://raw.githubusercontent.com/cnstudio-io/cnstudio/main/schemas/v1/textCommit.json" },
     "type": { "const": "textCommit" },
     "rev": { "type": "integer" },
     "path": { "$ref": "_defs.json#/$defs/NodePath" },

@@ -40,7 +40,7 @@ export namespace CnStudio {
 }
 
 /** The published id of the cnstudio extension (`<publisher>.<name>`). */
-export const STUDIO_EXTENSION_ID = "general-intelligence-systems.cnstudio";
+export const STUDIO_EXTENSION_ID = "cnstudio-io.cnstudio";
 
 /** The minimal slice of `vscode.extensions` this helper needs (so we don't import vscode). */
 export interface ExtensionsHost {
