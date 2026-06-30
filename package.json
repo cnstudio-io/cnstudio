@@ -21,7 +21,6 @@
     "./generate": "./dist/generate/index.js",
     "./codegen": "./dist/generate/codegen.js",
     "./react-web": "./dist/react/react-web.js",
-    "./vscode": "./dist/vscode/index.js",
     "./engine": "./dist/engine/index.js",
     "./schemas/*": "./schemas/*"
   },
