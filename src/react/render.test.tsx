@@ -49,8 +49,9 @@ describe("structural port", () => {
         children: [
           "Hello", // literal text child
           { type: "Card", props: {}, children: ["slotted"] },
-          // A custom component — `type` isn't a code component, so it renders
-          // dynamically as <section …>{children}</section>.
+          // An unregistered `type` — neither a code component nor a model
+          // component. Raw host tags are NOT valid nodes; it must surface as an
+          // invalid-node marker, never materialize as a <section> host element.
           { type: "section", props: { "data-x": "'y'" }, children: ["inside"] },
         ],
       },
@@ -76,10 +77,10 @@ describe("structural port", () => {
     expect(html).toContain("slotted"); // slot content from the instance's children
     expect(html).not.toContain("default"); // slot default replaced
   });
-  it("renders a custom component dynamically as its element", () => {
-    expect(html).toContain("<section"); // the custom component's tag
-    expect(html).toContain('data-x="y"'); // its prop expression, evaluated
-    expect(html).toContain("inside"); // its children
+  it("flags an unregistered type as an invalid node, not a host element", () => {
+    expect(html).not.toContain("<section"); // raw host tags are NOT valid nodes
+    expect(html).toContain('data-cnstudio-invalid="section"'); // marked invalid
+    expect(html).toContain("not a registered component"); // visible to the user
   });
   it("applies the active variant only when set", () => {
     expect(html).not.toContain('data-h="1"');

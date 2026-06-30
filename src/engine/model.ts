@@ -69,7 +69,7 @@ export type Component = Exclude<Node, string> & {
 export type Site = { components: Component[] };
 
 /** Whether a node is a component instance (vs. a literal text string). */
-export function isElement(n: Node): n is Exclude<Node, string> {
+export function isComponent(n: Node): n is Exclude<Node, string> {
   return typeof n !== "string";
 }
 
@@ -77,7 +77,7 @@ export function isElement(n: Node): n is Exclude<Node, string> {
 export function nodeAt(root: Node, path: NodePath): Node | undefined {
   let cur: Node | undefined = root;
   for (const i of path) {
-    if (cur === undefined || !isElement(cur)) return undefined;
+    if (cur === undefined || !isComponent(cur)) return undefined;
     cur = cur.children[i];
   }
   return cur;
@@ -171,17 +171,17 @@ export function serializeSite(s: Site): unknown {
  * component actually accepts children is a schema concern resolved elsewhere.
  */
 export function isContainer(n: Node): boolean {
-  return isElement(n);
+  return isComponent(n);
 }
 
 /** A slot placeholder inside a component's tree. */
 export function isSlot(n: Node): boolean {
-  return isElement(n) && n.type === "slot";
+  return isComponent(n) && n.type === "slot";
 }
 
 /** Whether `n` is an instance of a component in `site` (type = a component name). */
 export function instanceOf(n: Node, site: Site): Component | undefined {
-  if (!isElement(n)) return undefined;
+  if (!isComponent(n)) return undefined;
   return site.components.find((c) => c.name === n.type);
 }
 

@@ -172,6 +172,37 @@ export function NodeWrapper(props: NodeWrapperProps): ReactNode {
     });
   }
 
+  // Nothing resolved this `type`: not a slot, not a code component, not a model
+  // component. Per the model a node ALWAYS instances a registered component; the
+  // sole exception is the reserved `Custom` (a UI-created component's root). Any
+  // other `type` here is an unregistered node — a raw host tag (`<div>`, `<span>`,
+  // `<a>`…) that was hand-written or imported into site.json. These are NOT valid
+  // nodes: surface them as a visible error instead of silently materializing the
+  // host element. The node stays tagged so it is selectable/deletable in the canvas.
+  if (node.type !== "Custom") {
+    const errProps: Record<string, unknown> = {
+      "data-cnstudio-invalid": node.type,
+      style: {
+        display: "inline-block",
+        outline: "1px dashed #e5484d",
+        color: "#e5484d",
+        background: "#e5484d14",
+        font: "11px/1.4 ui-monospace, monospace",
+        padding: "1px 4px",
+        borderRadius: "3px",
+      },
+    };
+    if (tagPath !== null) {
+      errProps["data-spath"] = tagPath.join(".");
+      if (tagPath.length > 0) errProps["draggable"] = true;
+    }
+    return createElement(
+      "span",
+      errProps,
+      `⚠ <${node.type}> is not a registered component`
+    );
+  }
+
   // UI-created component (reserved type "Custom"): a composition of its children,
   // rendered in a plain <div> wrapper that carries its props (className/style) and
   // tags itself + its children with `data-spath` for canvas selection.
@@ -185,7 +216,7 @@ export function NodeWrapper(props: NodeWrapperProps): ReactNode {
   const childTag = (i: number): NodePath | null =>
     freeze || tagPath === null ? null : [...tagPath, i];
   const kids = node.children.map((c, i) => childWrapper(c, i, childTag(i)));
-  return createElement(node.type === "Custom" ? "div" : node.type, dom, ...kids);
+  return createElement("div", dom, ...kids);
 }
 
 /** Props on {@link NodeComponent} — the instance boundary. */

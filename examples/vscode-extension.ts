@@ -42,11 +42,10 @@ function registerChart() {
   // The full engine surface is available — e.g. register a code component…
   studio.codeComponents.register("Chart", { kind: "line", title: "Untitled" });
 
-  // …and mutate the model through a tracked, undoable change.
-  studio.change((tx) => {
-    // tx.insertChild(path, node, index), tx.setProp(path, key, value), tx.remove(path), …
-    void tx;
-  });
+  // …and mutate the model through the `layers` operations — each one is its own
+  // tracked, undoable edit: layers.insert(node, parent, index),
+  // layers.setProp(path, key, value), layers.remove(path), …
+  void studio.layers;
 
   if (studio.history.canUndo) {
     // studio.history.undo() / studio.history.redo() are available too.

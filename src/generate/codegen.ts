@@ -152,50 +152,41 @@ export function runCodegen(
 
 /**
  * A platform's emit rules. The web and React Native paths share one tree walk and
- * differ only in: how a host tag maps to a component, whether bare text must be
- * wrapped (RN forbids raw strings outside `<Text>`), which props are renamed /
- * dropped, and the import line for whatever host components were used.
+ * differ only in: the element a UI-created component's root (`Custom`) wraps its
+ * children in, whether bare text must be wrapped (RN forbids raw strings outside
+ * `<Text>`), which props are renamed / dropped, and the import line for the host
+ * components used. (Nodes only ever instance registered components or the reserved
+ * `Custom`/`slot` — there are no arbitrary host tags to map.)
  */
 export interface Platform {
-  /** Map a host tag (e.g. "div") to the emitted component (e.g. "View"). */
-  hostTag(tag: string): string;
-  /** Whether an emitted tag renders its children as text (so no `<Text>` wrap). */
-  isTextHost(emittedTag: string): boolean;
+  /** The element a `Custom` root emits as: `div` (web) or `View` (React Native). */
+  wrapperTag: string;
+  /** Whether the wrapper renders its children as text (so no `<Text>` wrap). The
+   *  DOM lets any element hold text; RN's `View` does not. */
+  wrapperHoldsText: boolean;
   /** Whether a bare string/expr child must be wrapped (RN) when not already in text. */
   wrapText: boolean;
   /** Rename / drop a prop key; return null to drop it. */
   mapProp(key: string): string | null;
-  /** Import line(s) for the host components actually used (`usedHostTags`). */
+  /** Import line(s) for the host components actually used (`View`/`Text` on RN). */
   hostImports(usedHostTags: Set<string>): string;
 }
 
-/** The web (DOM) platform: tags and props pass through unchanged. */
+/** The web (DOM) platform: the `Custom` wrapper is a `<div>`; props pass through. */
 export const WEB: Platform = {
-  hostTag: (tag) => tag, // DOM tags pass through unchanged
-  isTextHost: () => true, // the DOM lets any element hold text
+  wrapperTag: "div",
+  wrapperHoldsText: true, // the DOM lets any element hold text
   wrapText: false,
   mapProp: (key) => key,
   hostImports: () => "", // DOM intrinsics need no import
 };
 
-/** RN tag map: textual tags → Text, structural tags → View, plus a few specials. */
-const RN_TEXT_TAGS = new Set([
-  "span", "p", "a", "label", "strong", "em", "b", "i", "small",
-  "h1", "h2", "h3", "h4", "h5", "h6",
-]);
-const RN_SPECIAL: Record<string, string> = {
-  img: "Image",
-  input: "TextInput",
-  textarea: "TextInput",
-  button: "Pressable",
-};
-
-/** The React Native platform (shared by `android` and `ios`). */
+/** The React Native platform (shared by `android` and `ios`): the `Custom`
+ *  wrapper is a `<View>`, and bare text is wrapped in `<Text>`. */
 export function reactNativePlatform(): Platform {
   return {
-    hostTag: (tag) =>
-      RN_SPECIAL[tag] ?? (RN_TEXT_TAGS.has(tag) ? "Text" : "View"),
-    isTextHost: (emitted) => emitted === "Text",
+    wrapperTag: "View",
+    wrapperHoldsText: false, // a View can't hold raw text — see wrapText
     wrapText: true,
     mapProp: (key) => {
       if (key === "className") return null; // RN has no className
@@ -219,11 +210,11 @@ interface Ctx {
 }
 
 /** How a node's `type` resolves: another designed component, a registered code
- * component (with its import), or a plain host tag. */
+ * component (with its import), or the reserved `Custom` wrapper. */
 type Kind =
   | { kind: "instance" }
   | { kind: "code"; spec: ImportSpec }
-  | { kind: "host" };
+  | { kind: "wrapper" };
 
 function classify(type: string, ctx: Ctx): Kind {
   if (instanceOf({ type, props: {}, children: [] }, ctx.site)) return { kind: "instance" };
@@ -231,20 +222,22 @@ function classify(type: string, ctx: Ctx): Kind {
   // export name (the design references components by bare name).
   const meta = Object.values(ctx.registry?.components ?? {}).find((m) => m.import.name === type);
   if (meta) return { kind: "code", spec: meta.import };
-  // Otherwise it's emitted as a host element — a UI-created component's root
-  // ("Custom") becomes a plain wrapper.
-  return { kind: "host" };
-}
-
-/** The host element a node emits as: a UI-created component's root ("Custom") is
- *  a plain `div`; any other host name passes through to the platform tag map. */
-function hostName(type: string): string {
-  return type === "Custom" ? "div" : type;
+  // The ONLY non-component type a valid model carries is the reserved `Custom`
+  // (a UI-created component's root), emitted as the platform wrapper element. Any
+  // other `type` is a raw host tag (`div`, `span`, `img`, …) — NOT a valid node
+  // (the editor's `assertType` can never create one). Fail the build rather than
+  // emit a bogus host element from a hand-edited / corrupt site.json.
+  if (type === "Custom") return { kind: "wrapper" };
+  throw new Error(
+    `cannot generate <${type}>: not a registered component. A node may only ` +
+      "instance a component from the registry (or the reserved `slot`); raw HTML " +
+      "tags are not valid node types."
+  );
 }
 
 /** What the tree walk collects, so the file header can be assembled correctly. */
 interface Collected {
-  /** Host components actually emitted (e.g. View/Text) — for the RN import line. */
+  /** Host components actually emitted (`View`/`Text` on RN) — for the import line. */
   hostTags: Set<string>;
   /** Other designed components referenced — emitted as `./Name` sibling imports. */
   modelComponents: Set<string>;
@@ -414,9 +407,9 @@ function collect(node: Node, ctx: Ctx, out: Collected, inText: boolean): void {
   if (cls.kind === "instance") out.modelComponents.add(node.type);
   else if (cls.kind === "code") out.codeComponents.set(node.type, cls.spec);
   else {
-    const tag = ctx.p.hostTag(hostName(node.type));
-    out.hostTags.add(tag);
-    childInText = ctx.p.isTextHost(tag);
+    // The reserved `Custom` wrapper (div / View).
+    out.hostTags.add(ctx.p.wrapperTag);
+    childInText = ctx.p.wrapperHoldsText;
   }
 
   // Each string prop value is a JS expression — record it so `$`-var usage is
@@ -448,9 +441,9 @@ function nodeToJsx(node: Node, ctx: Ctx, indent: number, inText: boolean): strin
   if (node.type === "slot") return `${pad}{$props.children}`;
 
   const cls = classify(node.type, ctx);
-  const isHost = cls.kind === "host";
-  const tag = isHost ? p.hostTag(hostName(node.type)) : node.type;
-  const childInText = isHost ? p.isTextHost(tag) : false;
+  const isWrapper = cls.kind === "wrapper";
+  const tag = isWrapper ? p.wrapperTag : node.type;
+  const childInText = isWrapper ? p.wrapperHoldsText : false;
 
   const attrs = node.variants ? variantAttrs(node, p) : propsToJsx(node.props, p);
   const open = attrs ? `${tag} ${attrs}` : tag;
