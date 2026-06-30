@@ -34,12 +34,16 @@ const V_ENTRY = "virtual:cnstudio/entry";
 const resolved = (id: string) => "\0" + id;
 
 /**
- * The cnstudio dev plugin. It (1) runs the generator → `.studio/registry.json` and
+ * The cnstudio plugin. It (1) runs the generator → `.studio/registry.json` and
  * re-runs it when components change, (2) synthesizes a virtual module that imports
- * the project's REAL components for the runtime, and (3) serves the injected
- * canvas-host entry the Studio extension loads as its iframe.
+ * the project's REAL components for the runtime, (3) serves the injected
+ * canvas-host entry the Studio extension loads as its iframe (dev only), and
+ * (4) codegens design pages on import (when `options.pages` is set).
  *
- * Dev-only (`apply: 'serve'`): production ships the extension-generated `.tsx`.
+ * Runs in BOTH serve and build: the canvas host is naturally dev-only (its
+ * `configureServer` middleware and entry module are only reachable in serve), but
+ * page codegen must also run during `vite build` so production bundles the
+ * generated `.tsx` without a separate `cnstudio generate` step.
  */
 export function cnstudio(options: CnstudioOptions = {}): Plugin {
   const studioDir = options.studioDir ?? ".studio";
@@ -112,7 +116,6 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
 
   return {
     name: "cnstudio",
-    apply: "serve",
     enforce: "pre",
 
     // The canvas host (@cnstudio-io/cnstudio/react) is served from the cnstudio package via
@@ -127,8 +130,8 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
     },
 
     async buildStart() {
-      // Sync the registry up front so the virtual module has something to import.
-      // (Registry only — codegen runs solely via `cnstudio generate`.)
+      // Sync the registry up front so the virtual module — and any page codegen
+      // (see `load`) — has the component import map to draw from.
       await syncRegistry(root).catch((e) => this.warn(`registry sync failed: ${e}`));
     },
 
