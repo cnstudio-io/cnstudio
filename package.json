@@ -1,6 +1,6 @@
 {
   "name": "@cnstudio-io/cnstudio",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Vite plugin + runtime that turns a real React/Tailwind project into a canvas the Studio extension can edit. Generates component registrations from source; renders the design model with the project's real components.",
   "type": "module",
   "license": "Apache-2.0",
