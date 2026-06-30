@@ -62,6 +62,14 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
   const readSite = (): unknown =>
     existsSync(sitePath()) ? JSON.parse(readFileSync(sitePath(), "utf8")) : { components: [] };
 
+  // Example `$ctx` for the canvas (`.studio/dev-context.json`): realistic data so
+  // components that read `$ctx` (e.g. a `$ctx.supabase`-driven login form) render
+  // while editing. Injected into the canvas host as `window.__CNSTUDIO_DEVCTX__`
+  // and provided via `<DataProvider>` by the runtime. Optional; `{}` when absent.
+  const devContextPath = () => join(root, studioDir, "dev-context.json");
+  const readDevContext = (): Record<string, unknown> =>
+    existsSync(devContextPath()) ? JSON.parse(readFileSync(devContextPath(), "utf8")) : {};
+
   // On-demand page codegen (opt-in via `options.pages`). A page is generated only
   // when its module is first imported (see resolveId/load), so nothing is emitted
   // during dev until the app actually asks for it.
@@ -271,6 +279,12 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
               activeVariant: q.get("variant"),
             }).replace(/</g, "\\u003c")};</script>`
           : "";
+        // Example `$ctx` for the canvas (so `$ctx`-reading components render with
+        // realistic data while editing). Empty object when no dev-context.json.
+        const devCtx = `<script>window.__CNSTUDIO_DEVCTX__=${JSON.stringify(readDevContext()).replace(
+          /</g,
+          "\\u003c"
+        )};</script>`;
         // Title the page (the browser tab) after the component so it reads as the
         // component name instead of the raw URL; fall back to the product name.
         const escapeHtml = (s: string) =>
@@ -287,7 +301,7 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
             `window.__cnlog=function(l,m){try{fetch(${JSON.stringify(`${configRoute}/log`)},{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({level:l,message:m})})}catch(e){}};` +
             `addEventListener('error',function(e){var m=String((e&&e.message)||'Failed to load');parent.postMessage({type:'cnstudio:error',message:m},'*');__cnlog('error',m)},true);` +
             `addEventListener('unhandledrejection',function(e){var m=String(e&&e.reason);parent.postMessage({type:'cnstudio:error',message:m},'*');__cnlog('error',m)});` +
-            `</script>${standalone}</head>` +
+            `</script>${devCtx}${standalone}</head>` +
             `<body><div id="cnstudio-root"></div>` +
             `<script type="module" src="/@id/${V_ENTRY}"></script></body></html>`;
         // Run through Vite's HTML pipeline so plugins inject what they need —

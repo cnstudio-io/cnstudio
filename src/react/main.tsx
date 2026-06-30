@@ -1,8 +1,15 @@
 import { createRoot } from "react-dom/client";
 import { toPng } from "html-to-image";
 import { CanvasHost } from "./CanvasHost";
+import { DataProvider } from "./DataProvider";
 import { host, isCaptureMsg, isRenderMsg, render, type HostMsgInput, type RenderMsg } from "../engine/protocol";
 import "./host.css";
+
+// Example `$ctx` the Vite plugin injects from `.studio/dev-context.json` so the
+// canvas renders `$ctx`-reading components (which call `useDataEnv()`) with
+// realistic data while editing. Provided via `<DataProvider>` around the host.
+const DEV_CTX: Record<string, unknown> =
+  (window as unknown as { __CNSTUDIO_DEVCTX__?: Record<string, unknown> }).__CNSTUDIO_DEVCTX__ ?? {};
 
 /** The standalone payload the Vite plugin injects for a `?component=` page. */
 interface Standalone {
@@ -93,7 +100,11 @@ export function mount(el: HTMLElement) {
     const msg = e.data as RenderMsg;
     lastRev = msg.rev;
     interactive = msg.interactive;
-    root.render(<CanvasHost msg={msg} post={post} />);
+    root.render(
+      <DataProvider value={DEV_CTX}>
+        <CanvasHost msg={msg} post={post} />
+      </DataProvider>
+    );
   });
 
   const pathAt = (el: EventTarget | null): number[] | null => {
@@ -177,7 +188,11 @@ function mountStandalone(el: HTMLElement, std: Standalone) {
     dropIndicator: null,
     interactive: true,
   });
-  createRoot(el).render(<CanvasHost msg={msg} post={() => {}} />);
+  createRoot(el).render(
+    <DataProvider value={DEV_CTX}>
+      <CanvasHost msg={msg} post={() => {}} />
+    </DataProvider>
+  );
 }
 
 // Auto-mount when the plugin serves this as the iframe entry. A `?component=`
