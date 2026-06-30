@@ -26,7 +26,7 @@ const site: Site = {
       children: [
         "Hello",
         { type: "Icon", props: { src: "'/a.png'" }, children: [] },
-        { type: "slot", props: {}, children: [] },
+        { type: "Slot", props: {}, children: [] },
       ],
     },
   ],

@@ -1,7 +1,15 @@
 import { createRoot } from "react-dom/client";
+import { toPng } from "html-to-image";
 import { CanvasHost } from "./CanvasHost";
-import { host, isRenderMsg, type HostMsgInput, type RenderMsg } from "../engine/protocol";
+import { host, isCaptureMsg, isRenderMsg, render, type HostMsgInput, type RenderMsg } from "../engine/protocol";
 import "./host.css";
+
+/** The standalone payload the Vite plugin injects for a `?component=` page. */
+interface Standalone {
+  siteJson: unknown;
+  componentName: string;
+  activeVariant: string | null;
+}
 
 // Mirror the canvas's console errors/warnings to the dev terminal (the host HTML
 // defines `window.__cnlog`, which POSTs to the cnstudio Vite plugin's /log route).
@@ -60,7 +68,27 @@ export function mount(el: HTMLElement) {
   /** Stamp the `schema` link, then post to the parent (the extension's webview). */
   const post = (m: HostMsgInput) => window.parent.postMessage(host(m), "*");
 
+  // Rasterize the rendered component to a PNG and post it back. Captures just the
+  // model subtree (`.__studio_root`), so editor chrome — selection/hover/drop
+  // overlays drawn by the host — never lands in the screenshot. An empty `dataUrl`
+  // signals failure (a broken render, a tainted resource) to the editor.
+  const capture = async () => {
+    const target = el.querySelector<HTMLElement>(".__studio_root") ?? el;
+    try {
+      const rect = target.getBoundingClientRect();
+      const dataUrl = await toPng(target, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true });
+      post({ type: "captured", dataUrl, width: Math.round(rect.width), height: Math.round(rect.height) });
+    } catch (err) {
+      console.error("[cnstudio] screenshot capture failed", err);
+      post({ type: "captured", dataUrl: "", width: 0, height: 0 });
+    }
+  };
+
   window.addEventListener("message", (e: MessageEvent) => {
+    if (isCaptureMsg(e.data)) {
+      void capture();
+      return;
+    }
     if (!isRenderMsg(e.data)) return;
     const msg = e.data as RenderMsg;
     lastRev = msg.rev;
@@ -130,6 +158,32 @@ export function mount(el: HTMLElement) {
   post({ type: "ready" });
 }
 
-// Auto-mount when the plugin serves this as the iframe entry.
+/**
+ * Standalone mount: render the component directly from the plugin-injected site
+ * model, with no editor driving it over postMessage. Used when the host page is
+ * opened on its own (the "Open in browser" button → `?component=Name`). `post` is
+ * a no-op — there is no parent editor to report measurements/input to.
+ */
+function mountStandalone(el: HTMLElement, std: Standalone) {
+  const msg: RenderMsg = render({
+    rev: 1,
+    modelRev: 1,
+    siteJson: std.siteJson,
+    componentName: std.componentName,
+    activeVariant: std.activeVariant,
+    selection: null,
+    hover: null,
+    editingPath: null,
+    dropIndicator: null,
+    interactive: true,
+  });
+  createRoot(el).render(<CanvasHost msg={msg} post={() => {}} />);
+}
+
+// Auto-mount when the plugin serves this as the iframe entry. A `?component=`
+// page carries a standalone payload → render it directly; otherwise wait for the
+// editor's render messages (the iframe case).
 const el = typeof document !== "undefined" && document.getElementById("cnstudio-root");
-if (el) mount(el);
+const standalone = (window as unknown as { __CNSTUDIO_STANDALONE__?: Standalone }).__CNSTUDIO_STANDALONE__;
+if (el && standalone) mountStandalone(el, standalone);
+else if (el) mount(el);

@@ -8,13 +8,23 @@ import type { ComponentType } from "react";
  */
 
 /** A single prop's editor schema. */
-export type PropSchema =
+export type PropSchema = (
   | { type: "string"; default?: string; label?: string }
   | { type: "number"; default?: number; min?: number; max?: number }
   | { type: "boolean"; default?: boolean }
   | { type: "enum"; options: string[]; default?: string }
   | { type: "color"; default?: string }
-  | { type: "slot" };
+  | { type: "slot" }
+) & {
+  /**
+   * Tier-1 custom control: overrides the default type-driven input with a named
+   * editor widget from the Properties panel's control registry (e.g.
+   * `"data-source"`). Authored via a `@control <name>` JSDoc tag on the prop.
+   */
+  control?: string;
+  /** Optional human label shown for the prop (overrides the prop key). */
+  label?: string;
+};
 
 /** Where the runtime imports a component's implementation from. */
 export interface ImportSpec {

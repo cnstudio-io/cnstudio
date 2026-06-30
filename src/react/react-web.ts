@@ -1,5 +1,6 @@
-import { createContext, createElement, useContext, type ReactNode } from "react";
+import { useContext } from "react";
 import { effectiveProps as engineEffectiveProps, type Node } from "../engine/model";
+import { DataEnvContext } from "./DataProvider";
 
 /**
  * The runtime that GENERATED components import. It is deliberately small: codegen emits the
@@ -15,32 +16,16 @@ import { effectiveProps as engineEffectiveProps, type Node } from "../engine/mod
 
 // ——— $ctx: the data environment provided down the tree ———
 
-/** The data context (`$ctx`) an ancestor data-provider contributes to its subtree. */
-const DataEnvContext = createContext<Record<string, any>>({});
+/** The `<DataProvider>` a data-provider component wraps its children with — see `./DataProvider`. */
+export { DataProvider } from "./DataProvider";
 
 /**
  * Read the current `$ctx` — the merged data provided by ancestor
- * {@link DataProvider}s. Generated components call this to source `$ctx` (the
+ * `DataProvider`s. Generated components call this to source `$ctx` (the
  * codegen counterpart of the canvas runtime's `EnvContext`). Returns `{}` when no provider is above.
  */
 export function useDataEnv(): Record<string, any> {
   return useContext(DataEnvContext);
-}
-
-/**
- * A data-provider component wraps its children with this to contribute keys to
- * `$ctx` (e.g. `<DataProvider value={{ products }}>`). Values merge over the
- * ancestor context, matching `react/render.tsx`'s `EnvProvider`.
- */
-export function DataProvider({
-  value,
-  children,
-}: {
-  value: Record<string, any>;
-  children?: ReactNode;
-}): ReactNode {
-  const parent = useContext(DataEnvContext);
-  return createElement(DataEnvContext.Provider, { value: { ...parent, ...value } }, children);
 }
 
 /**

@@ -59,7 +59,7 @@ describe("structural port", () => {
         name: "Card",
         type: "Box",
         props: {},
-        children: [{ type: "slot", props: {}, children: ["default"] }],
+        children: [{ type: "Slot", props: {}, children: ["default"] }],
       },
     ],
   };
@@ -85,6 +85,88 @@ describe("structural port", () => {
   it("applies the active variant only when set", () => {
     expect(html).not.toContain('data-h="1"');
     expect(markup(page, site, { resolveCode, activeVariant: "Hover" })).toContain('data-h="1"');
+  });
+});
+
+describe("named slots", () => {
+  const Box: ComponentType<Record<string, unknown>> = ({ children, ...rest }) =>
+    createElement("div", rest, children as ReactNode);
+  const resolveCode = (t: string) => (t === "Box" ? Box : undefined);
+
+  // A Shell with a named "header" slot, a named "footer" slot (left empty by the
+  // instance, so it shows its placeholder), and a default slot.
+  const site: Site = {
+    components: [
+      {
+        name: "Shell",
+        type: "Box",
+        props: {},
+        children: [
+          { type: "Slot", props: { name: "header" }, children: ["no-header"] },
+          { type: "Slot", props: {}, children: ["no-default"] },
+          { type: "Slot", props: { name: "footer" }, children: ["placeholder-footer"] },
+        ],
+      },
+    ],
+  };
+  const page: Component = {
+    name: "Page",
+    type: "Shell",
+    props: {},
+    // Default slot via `children`; named slots via `slots`.
+    children: ["the-body"],
+    slots: { header: ["the-header"] },
+  };
+  const html = markup(page, { components: [page, ...site.components] }, { resolveCode });
+
+  it("routes the instance's children to the default slot", () => {
+    expect(html).toContain("the-body");
+    expect(html).not.toContain("no-default");
+  });
+  it("routes a named-slot fill to its matching marker", () => {
+    expect(html).toContain("the-header");
+    expect(html).not.toContain("no-header");
+  });
+  it("shows a named slot's placeholder when the instance leaves it empty", () => {
+    expect(html).toContain("placeholder-footer");
+  });
+});
+
+describe("loop", () => {
+  const Box: ComponentType<Record<string, unknown>> = ({ children, ...rest }) =>
+    createElement("div", rest, children as ReactNode);
+  const resolveCode = (t: string) => (t === "Box" ? Box : undefined);
+
+  const page: Component = {
+    name: "List",
+    type: "Box",
+    props: {},
+    children: [
+      {
+        type: "Loop",
+        // `data` is an expression (→ array); `name` is the loop's identifier.
+        props: { data: "[{ title: 'a' }, { title: 'b' }]", name: "row" },
+        children: [
+          {
+            type: "Box",
+            props: { "data-title": "$loop.row.current.title", "data-i": "$loop.row.index", "data-n": "$loop.row.all.length" },
+            children: [],
+          },
+        ],
+      },
+    ],
+  };
+  const html = markup(page, { components: [page] }, { resolveCode });
+
+  it("renders the template once per data element", () => {
+    expect((html.match(/data-title/g) ?? []).length).toBe(2);
+  });
+  it("binds $loop.<name>.current / .index / .all to each iteration", () => {
+    expect(html).toContain('data-title="a"');
+    expect(html).toContain('data-title="b"');
+    expect(html).toContain('data-i="0"');
+    expect(html).toContain('data-i="1"');
+    expect(html).toContain('data-n="2"'); // .all is the whole array
   });
 });
 

@@ -400,7 +400,7 @@ function collect(node: Node, ctx: Ctx, out: Collected, inText: boolean): void {
     if (ctx.p.wrapText && !inText) out.hostTags.add("Text");
     return;
   }
-  if (node.type === "slot") { out.hasSlot = true; return; }
+  if (node.type === "Slot") { out.hasSlot = true; return; }
 
   const cls = classify(node.type, ctx);
   let childInText = false;
@@ -438,7 +438,7 @@ function nodeToJsx(node: Node, ctx: Ctx, indent: number, inText: boolean): strin
   }
 
   // Slot placeholder → render the passed children.
-  if (node.type === "slot") return `${pad}{$props.children}`;
+  if (node.type === "Slot") return `${pad}{$props.children}`;
 
   const cls = classify(node.type, ctx);
   const isWrapper = cls.kind === "wrapper";

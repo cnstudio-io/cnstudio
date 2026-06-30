@@ -10,8 +10,11 @@ import type { RuntimeRegistry } from "../engine/schema";
  */
 // Declared in ./virtual.d.ts; provided at build time by the cnstudio Vite plugin.
 import generated from "virtual:cnstudio/registry";
+import { primitives } from "../primitives";
 
-export const registry: RuntimeRegistry = generated as RuntimeRegistry;
+// Built-in studio primitives are merged on top of the project's components, so a
+// project never needs to register them and can't accidentally shadow them.
+export const registry: RuntimeRegistry = { ...(generated as RuntimeRegistry), ...primitives };
 
 /** resolveCode for renderNode: model node type → real component (a registered
  *  code component). A `type` that resolves to neither a code component nor a

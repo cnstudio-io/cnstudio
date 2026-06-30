@@ -10,6 +10,13 @@ export interface Env {
   $props: Record<string, unknown>;
   /** Read-only data provided by an ancestor provider component. */
   $ctx: Record<string, unknown>;
+  /**
+   * Loop variables, keyed by each enclosing `<Loop>`'s `name` prop. A child reads
+   * `$loop.<name>.current` (the current element), `$loop.<name>.index`, and
+   * `$loop.<name>.all` (the whole array). Nested loops accumulate distinct names
+   * (`$loop.product`, `$loop.tag`).
+   */
+  $loop?: Record<string, { current: unknown; index: number; all: unknown[] }>;
 }
 
 /** A compiled expression / action. `$` is the {@link Env}; `$event` only for actions. */

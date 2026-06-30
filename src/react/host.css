@@ -26,20 +26,23 @@ body {
 }
 
 /* selection / hover / drop overlays — drawn by the host (the studio can't reach in) */
+/* Overlays must paint above ANY app content. The rendered component can position
+   elements (e.g. a `fixed` sidebar at z-10/z-20) that would otherwise cover the
+   selection box, so the overlays sit at the top of the stacking order. */
 .sel-box {
   position: absolute;
   border: 2px solid #1f6feb;
   border-radius: 2px;
   pointer-events: none;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
-  z-index: 5;
+  z-index: 2147483645;
 }
 .hover-box {
   position: absolute;
   border: 1px solid #54aeff;
   border-radius: 2px;
   pointer-events: none;
-  z-index: 4;
+  z-index: 2147483644;
 }
 .drop-inside {
   position: absolute;
@@ -47,13 +50,13 @@ body {
   border-radius: 3px;
   background: rgba(26, 127, 55, 0.06);
   pointer-events: none;
-  z-index: 6;
+  z-index: 2147483646;
 }
 .drop-line {
   position: absolute;
   height: 0;
   border-top: 2px solid #1a7f37;
   pointer-events: none;
-  z-index: 6;
+  z-index: 2147483646;
 }
 

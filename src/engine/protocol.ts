@@ -16,8 +16,10 @@ export const SCHEMA_BASE =
 /** Every message type → the URL of its schema file. */
 export type MsgType =
   | "render"
+  | "capture"
   | "ready"
   | "rendered"
+  | "captured"
   | "rects"
   | "pointer"
   | "wheel"
@@ -60,10 +62,16 @@ export interface RenderMsg extends Envelope<"render"> {
   interactive: boolean;
 }
 
+/** extension → host: ask the host to rasterize the rendered component to a PNG
+ * (it replies with a `captured` message). Carries no payload — the host captures
+ * whatever it is currently showing. */
+export interface CaptureMsg extends Envelope<"capture"> {}
+
 /** host → extension: raw input + measurements (the extension interprets it). */
 export type HostMsg =
   | Envelope<"ready">
   | (Envelope<"rendered"> & { rev: number; height: number })
+  | (Envelope<"captured"> & { dataUrl: string; width: number; height: number })
   | (Envelope<"rects"> & { rev: number; rects: Record<string, Rect> })
   | (Envelope<"pointer"> & {
       rev: number;
@@ -119,4 +127,15 @@ export function isHostMsg(v: unknown): v is HostMsg {
 /** Type guard for the render message arriving from the extension. */
 export function isRenderMsg(v: unknown): v is RenderMsg {
   return !!v && typeof v === "object" && (v as RenderMsg).type === "render";
+}
+
+/** Stamp the envelope onto a capture request — the extension's counterpart to
+ * {@link render} for the (payload-free) capture command. */
+export function capture(): CaptureMsg {
+  return { type: "capture", schema: schemaUrl("capture") };
+}
+
+/** Type guard for the capture request arriving from the extension. */
+export function isCaptureMsg(v: unknown): v is CaptureMsg {
+  return !!v && typeof v === "object" && (v as CaptureMsg).type === "capture";
 }

@@ -4,6 +4,7 @@ import type { Plugin } from "vite";
 import { syncRegistry, loadConfig, SITE_FILE, REGISTRY_FILE } from "../generate/cli";
 import { extractComponentProps } from "../generate/index";
 import type { PropSchema, RegistryFile } from "../engine/schema";
+import { primitiveSchemas } from "../primitives";
 
 export interface CnstudioOptions {
   /** Globs of component files to register. */
@@ -42,6 +43,10 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
   const registryPath = () => join(root, studioDir, REGISTRY_FILE);
   const readRegistry = (): RegistryFile =>
     existsSync(registryPath()) ? JSON.parse(readFileSync(registryPath(), "utf8")) : { components: {} };
+
+  const sitePath = () => join(root, studioDir, SITE_FILE);
+  const readSite = (): unknown =>
+    existsSync(sitePath()) ? JSON.parse(readFileSync(sitePath(), "utf8")) : { components: [] };
 
   // Lazy per-component prop schemas. The registry is generated WITHOUT props (a
   // cheap Babel enumeration — see generateRegistry); the slow TS extraction runs
@@ -166,6 +171,14 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
         // no component by that name exists.
         if (url === `${configRoute}/props`) {
           const name = new URL(req.url ?? "", "http://localhost").searchParams.get("name") ?? "";
+          // Built-in studio primitives have no project source — serve their schemas
+          // directly (this is also where the Tier-1 `data-source` control on Loop
+          // reaches the Properties panel).
+          if (primitiveSchemas[name]) {
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ name, props: primitiveSchemas[name] }));
+            return;
+          }
           void componentProps(name).then((props) => {
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ name, props }));
@@ -192,8 +205,27 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
           return;
         }
         if (!url.startsWith(route)) return next();
+        // Standalone render: `?component=Name` (optionally `&variant=`) makes the
+        // page render that component on its own — no editor / postMessage driver —
+        // so it can be opened directly in a browser (the "Open in browser" button).
+        // The site model is read from disk and injected for the runtime to mount.
+        const q = new URL(req.url ?? "", "http://localhost").searchParams;
+        const component = q.get("component");
+        const standalone = component
+          ? `<script>window.__CNSTUDIO_STANDALONE__=${JSON.stringify({
+              siteJson: readSite(),
+              componentName: component,
+              activeVariant: q.get("variant"),
+            }).replace(/</g, "\\u003c")};</script>`
+          : "";
+        // Title the page (the browser tab) after the component so it reads as the
+        // component name instead of the raw URL; fall back to the product name.
+        const escapeHtml = (s: string) =>
+          s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const title = component ? escapeHtml(component) : "CnStudio";
         const html =
           `<!doctype html><html><head><meta charset="utf-8" />` +
+            `<title>${title}</title>` +
             `<style>html,body,#cnstudio-root{margin:0;height:100%}</style>` +
             // Report load/transform failures (a broken import, a 500'd module) to
             // the embedding canvas tab so it can show an error instead of a blank
@@ -202,7 +234,7 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
             `window.__cnlog=function(l,m){try{fetch(${JSON.stringify(`${configRoute}/log`)},{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({level:l,message:m})})}catch(e){}};` +
             `addEventListener('error',function(e){var m=String((e&&e.message)||'Failed to load');parent.postMessage({type:'cnstudio:error',message:m},'*');__cnlog('error',m)},true);` +
             `addEventListener('unhandledrejection',function(e){var m=String(e&&e.reason);parent.postMessage({type:'cnstudio:error',message:m},'*');__cnlog('error',m)});` +
-            `</script></head>` +
+            `</script>${standalone}</head>` +
             `<body><div id="cnstudio-root"></div>` +
             `<script type="module" src="/@id/${V_ENTRY}"></script></body></html>`;
         // Run through Vite's HTML pipeline so plugins inject what they need —

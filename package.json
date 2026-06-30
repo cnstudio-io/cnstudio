@@ -49,6 +49,7 @@
     "@babel/parser": "^7.25.0",
     "@babel/traverse": "^7.25.0",
     "ejs": "^6.0.1",
+    "html-to-image": "^1.11.13",
     "react-docgen-typescript": "^2.2.2",
     "tinyglobby": "^0.2.10"
   },
