@@ -19,6 +19,12 @@ import { DataEnvContext } from "./DataProvider";
 /** The `<DataProvider>` a data-provider component wraps its children with — see `./DataProvider`. */
 export { DataProvider } from "./DataProvider";
 
+// Built-in layout primitives. Generated code references them by bare name
+// (`DomElement`, `HorizontalStack`, `VerticalStack`) the same way the canvas
+// runtime merges them into its registry — so codegen emits an import from here
+// rather than from project source (they ship with cnstudio, not the project).
+export { DomElement, HorizontalStack, VerticalStack } from "../primitives";
+
 /**
  * Read the current `$ctx` — the merged data provided by ancestor
  * `DataProvider`s. Generated components call this to source `$ctx` (the

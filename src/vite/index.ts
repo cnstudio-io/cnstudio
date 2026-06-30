@@ -1,8 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import type { Plugin } from "vite";
 import { syncRegistry, loadConfig, SITE_FILE, REGISTRY_FILE } from "../generate/cli";
 import { extractComponentProps } from "../generate/index";
+import { parseSite } from "../engine/model";
+import { makeFiles, WEB } from "../generate/codegen";
 import type { PropSchema, RegistryFile } from "../engine/schema";
 import { primitiveSchemas } from "../primitives";
 
@@ -17,6 +19,14 @@ export interface CnstudioOptions {
   css?: string;
   /** Path the extension's `studio.appUrl` points at. */
   route?: string;
+  /**
+   * Directory (relative to root) where the plugin lazily generates one real
+   * `.tsx` per design page — on first import, NOT eagerly. e.g. `"app/javascript/
+   * generated"`, then the app imports `@/generated/<name>`. The file is (re)written
+   * to disk and regenerated on every site-model change (HMR). Omit to disable
+   * on-demand generation (use the `cnstudio generate` CLI instead).
+   */
+  pages?: string;
 }
 
 const V_REGISTRY = "virtual:cnstudio/registry";
@@ -47,6 +57,27 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
   const sitePath = () => join(root, studioDir, SITE_FILE);
   const readSite = (): unknown =>
     existsSync(sitePath()) ? JSON.parse(readFileSync(sitePath(), "utf8")) : { components: [] };
+
+  // On-demand page codegen (opt-in via `options.pages`). A page is generated only
+  // when its module is first imported (see resolveId/load), so nothing is emitted
+  // during dev until the app actually asks for it.
+  const pagesDir = options.pages;
+  const pagesAbs = () => join(root, pagesDir!);
+  const isPageId = (id: string) => !!pagesDir && id.split("?")[0].startsWith(pagesAbs() + "/");
+  /** Generate one design page's `.tsx`, write it to disk (for visibility), return its source. */
+  const generatePage = (name: string): string | null => {
+    const site = parseSite(readSite());
+    const file = makeFiles(site, { root, registry: readRegistry() }, WEB, "web", "", undefined)
+      .find((f) => f.path === `${name}.tsx`);
+    if (!file) return null; // no design page by that name
+    const dest = join(pagesAbs(), `${name}.tsx`);
+    // Only write when changed — rewriting identical content would churn the watcher.
+    if (!existsSync(dest) || readFileSync(dest, "utf8") !== file.content) {
+      mkdirSync(pagesAbs(), { recursive: true });
+      writeFileSync(dest, file.content);
+    }
+    return file.content;
+  };
 
   // Lazy per-component prop schemas. The registry is generated WITHOUT props (a
   // cheap Babel enumeration — see generateRegistry); the slow TS extraction runs
@@ -104,6 +135,13 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
     resolveId(id) {
       if (id === V_REGISTRY) return resolved(V_REGISTRY);
       if (id === V_ENTRY) return resolved(V_ENTRY);
+      // A page import (e.g. `@/generated/home`, alias-resolved to an absolute path
+      // under the pages dir) — claim it with a `.tsx` extension even when no file
+      // exists yet, so `load` can generate it on first request.
+      if (isPageId(id)) {
+        const name = basename(id.split("?")[0]).replace(/\.(tsx|ts|jsx|js)$/, "");
+        if (name) return join(pagesAbs(), `${name}.tsx`);
+      }
     },
 
     load(id) {
@@ -140,11 +178,23 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
         const css = options.css ? `import ${JSON.stringify(options.css)};\n` : "";
         return `${css}import "@cnstudio-io/cnstudio/react.css";\nimport "@cnstudio-io/cnstudio/react";\n`;
       }
+      // Lazily codegen a design page on first import (and on every site change).
+      if (isPageId(id) && id.split("?")[0].endsWith(".tsx")) {
+        const src = generatePage(basename(id.split("?")[0], ".tsx"));
+        if (src != null) return src;
+      }
     },
 
     configureServer(server) {
       // Re-sync the registry when a component file changes (HMR the virtual module).
       const onChange = async (file: string) => {
+        // The design model changed → regenerate every page already imported (HMR).
+        if (pagesDir && file === sitePath()) {
+          for (const mod of server.moduleGraph.idToModuleMap.values()) {
+            if (mod.id && isPageId(mod.id) && mod.id.endsWith(".tsx")) server.reloadModule(mod);
+          }
+          return;
+        }
         if (!/components\/.*\.[jt]sx?$/.test(file)) return;
         propsCache.clear(); // a component's props may have changed → re-extract on next ask
         await syncRegistry(root).catch((e) => server.config.logger.warn(`[cnstudio] ${e}`));

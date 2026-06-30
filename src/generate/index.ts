@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { relative } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { withCustomConfig } from "react-docgen-typescript";
 import { parse as babelParse } from "@babel/parser";
 import _traverse from "@babel/traverse";
@@ -42,9 +42,10 @@ export function generateRegistry(config: GenerateConfig = {}): RegistryFile {
   // Keyed by a UNIQUE id (`module#name`), not the bare export name — two files can
   // export the same name (e.g. ui/avatar.tsx and ui/8bit/avatar.tsx both export
   // `Avatar`); keying by name would let one overwrite the other.
+  const aliases = loadAliasRules(root, config.tsconfig ?? DEFAULTS.tsconfig);
   const components: Record<string, ComponentMeta> = {};
   for (const file of files) {
-    const module = moduleSpecifier(root, file);
+    const module = moduleSpecifier(root, file, aliases);
     for (const { name, default: isDefault } of enumerateExports(file)) {
       components[`${module}#${name}`] = {
         import: { module, name, ...(isDefault ? { default: true } : {}) },
@@ -226,11 +227,84 @@ function destructuringDefaults(file: string): Record<string, Record<string, unkn
   return out;
 }
 
-/** Map a component file path to the project's import specifier (assumes `@/` → src/). */
-function moduleSpecifier(root: string, file: string): string {
-  const rel = relative(root, file).replace(/\\/g, "/").replace(/\.[jt]sx?$/, "");
-  // TODO: read tsconfig `paths` to resolve the real alias (Next uses `@/*` → `./*`).
-  return rel.startsWith("src/") ? `@/${rel.slice(4)}` : `./${rel}`;
+/** A tsconfig `paths` wildcard alias, e.g. `@/*` → `./app/javascript/*`. */
+interface AliasRule {
+  /** The alias prefix without its trailing `*`, e.g. `@/`. */
+  prefix: string;
+  /** Absolute dir the alias maps to (the target without its trailing `*`), no trailing slash. */
+  baseAbs: string;
+}
+
+/** Strip `//` and block comments + trailing commas so a tsconfig parses as JSON. */
+function parseJsonc(text: string): unknown {
+  const stripped = text
+    // Remove comments, but skip anything inside a string literal.
+    .replace(/"(?:\\.|[^"\\])*"|\/\/[^\n\r]*|\/\*[\s\S]*?\*\//g, (m) => (m[0] === '"' ? m : ""))
+    .replace(/,(\s*[}\]])/g, "$1");
+  return JSON.parse(stripped);
+}
+
+/**
+ * Resolve the project's tsconfig `paths` into {@link AliasRule}s. This is what lets
+ * {@link moduleSpecifier} emit an import the bundler can actually resolve — there is
+ * NO hardcoded `src/` → `@/` assumption; the real alias is read from the project's
+ * tsconfig (following one `extends` level if the file itself declares none). Only
+ * wildcard aliases (`<alias>/*` → `<target>/*`) are used. Sorted most-specific-first
+ * so the longest matching base wins. Returns `[]` when no alias is declared.
+ */
+function loadAliasRules(root: string, tsconfigRel: string): AliasRule[] {
+  const tsconfigAbs = isAbsolute(tsconfigRel) ? tsconfigRel : resolve(root, tsconfigRel);
+  let cfg: TsConfig;
+  try {
+    cfg = parseJsonc(readFileSync(tsconfigAbs, "utf8")) as TsConfig;
+  } catch {
+    return [];
+  }
+  const dir = dirname(tsconfigAbs);
+  let opts = cfg.compilerOptions ?? {};
+  // Path aliases often live in a base config the project extends — follow one level.
+  if (!opts.paths && typeof cfg.extends === "string") {
+    try {
+      const ext = resolve(dir, cfg.extends);
+      const base = parseJsonc(readFileSync(ext.endsWith(".json") ? ext : `${ext}.json`, "utf8")) as TsConfig;
+      opts = { ...base.compilerOptions, ...opts };
+    } catch {
+      /* base config unreadable — fall back to whatever this file declares */
+    }
+  }
+  if (!opts.paths) return [];
+  const baseUrlAbs = resolve(dir, typeof opts.baseUrl === "string" ? opts.baseUrl : ".");
+  const rules: AliasRule[] = [];
+  for (const [alias, targets] of Object.entries(opts.paths)) {
+    const target = Array.isArray(targets) ? targets[0] : undefined;
+    if (!alias.endsWith("/*") || typeof target !== "string" || !target.endsWith("/*")) continue;
+    rules.push({
+      prefix: alias.slice(0, -1), // "@/*" → "@/"
+      baseAbs: resolve(baseUrlAbs, target.slice(0, -1)).replace(/\\/g, "/").replace(/\/$/, ""),
+    });
+  }
+  return rules.sort((a, b) => b.baseAbs.length - a.baseAbs.length);
+}
+
+interface TsConfig {
+  extends?: unknown;
+  compilerOptions?: { paths?: Record<string, unknown>; baseUrl?: unknown };
+}
+
+/**
+ * The import specifier written into the registry for a component file. This string
+ * is fed VERBATIM to `import(...)` by the runtime virtual module, so it must resolve.
+ * It maps the file through the project's declared tsconfig path alias (e.g.
+ * `@/* → app/javascript/*` yields `@/components/x`), and only falls back to a
+ * root-relative path when the project declares no matching alias.
+ */
+function moduleSpecifier(root: string, file: string, aliases: AliasRule[]): string {
+  const noExt = file.replace(/\\/g, "/").replace(/\.[jt]sx?$/, "");
+  for (const { prefix, baseAbs } of aliases) {
+    const base = `${baseAbs}/`;
+    if (noExt.startsWith(base)) return prefix + noExt.slice(base.length);
+  }
+  return `./${relative(root, file).replace(/\\/g, "/").replace(/\.[jt]sx?$/, "")}`;
 }
 
 function pick<T extends object>(o: T, keys: string[]): Partial<T> {

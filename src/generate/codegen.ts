@@ -209,6 +209,11 @@ interface Ctx {
   p: Platform;
 }
 
+/** Renderable built-in primitives — emitted as imports from the cnstudio runtime
+ *  (`@cnstudio-io/cnstudio/react-web`). `Slot` and `Loop` are engine-handled in
+ *  the walk, so they are intentionally excluded here. */
+const RUNTIME_PRIMITIVES = new Set(["DomElement", "HorizontalStack", "VerticalStack"]);
+
 /** How a node's `type` resolves: another designed component, a registered code
  * component (with its import), or the reserved `Custom` wrapper. */
 type Kind =
@@ -222,6 +227,14 @@ function classify(type: string, ctx: Ctx): Kind {
   // export name (the design references components by bare name).
   const meta = Object.values(ctx.registry?.components ?? {}).find((m) => m.import.name === type);
   if (meta) return { kind: "code", spec: meta.import };
+  // Built-in layout primitives ship with cnstudio (not the project) and aren't in
+  // registry.json — they're merged into the runtime registry only. Emit them as
+  // code components imported from the cnstudio runtime so the design can place
+  // them anywhere without the project registering anything. (`Slot`/`Loop` are
+  // engine-handled — see nodeToJsx — and never reach here.)
+  if (RUNTIME_PRIMITIVES.has(type)) {
+    return { kind: "code", spec: { module: "@cnstudio-io/cnstudio/react-web", name: type } };
+  }
   // The ONLY non-component type a valid model carries is the reserved `Custom`
   // (a UI-created component's root), emitted as the platform wrapper element. Any
   // other `type` is a raw host tag (`div`, `span`, `img`, …) — NOT a valid node
