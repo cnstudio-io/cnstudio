@@ -1,8 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
 import type { Plugin } from "vite";
 import { syncRegistry, loadConfig, SITE_FILE, REGISTRY_FILE } from "../generate/cli";
-import { extractComponentProps } from "../generate/index";
+import { extractComponentProps, locateComponentFile, type GenerateConfig } from "../generate/index";
 import { parseSite } from "../engine/model";
 import { makeFiles, WEB } from "../generate/codegen";
 import type { PropSchema, RegistryFile } from "../engine/schema";
@@ -98,15 +100,98 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
 
   // Lazy per-component prop schemas. The registry is generated WITHOUT props (a
   // cheap Babel enumeration — see generateRegistry); the slow TS extraction runs
-  // here, for one component at a time, only when the Properties panel asks for it.
-  // Cached until a component file changes (`onChange` clears it).
-  const propsCache = new Map<string, Record<string, PropSchema> | null>();
-  const componentProps = async (name: string): Promise<Record<string, PropSchema> | null> => {
-    if (propsCache.has(name)) return propsCache.get(name)!;
-    const cfg = (await loadConfig(root).catch(() => ({}))) as { components?: string[]; tsconfig?: string };
-    const props = extractComponentProps({ root, components: cfg.components, tsconfig: cfg.tsconfig }, name);
-    propsCache.set(name, props);
-    return props;
+  // one component at a time, only when the Properties panel asks for it — in a
+  // WORKER THREAD, because react-docgen-typescript builds a full TS program per
+  // parse (seconds of CPU) and running that on the dev server's event loop stalls
+  // every module request behind it. Results persist in `.studio/component-props.json`
+  // keyed by the source file's mtime, so restarts don't re-pay the extraction;
+  // `onChange` evicts just the changed file's entries.
+  type PropsCacheEntry = { file: string; mtimeMs: number; props: Record<string, PropSchema> | null };
+  const propsCachePath = () => join(root, studioDir, "component-props.json");
+  let propsCache: Map<string, PropsCacheEntry> | undefined;
+  const loadPropsCache = (): Map<string, PropsCacheEntry> => {
+    if (!propsCache) {
+      propsCache = new Map();
+      try {
+        const raw = JSON.parse(readFileSync(propsCachePath(), "utf8")) as Record<string, PropsCacheEntry>;
+        for (const [k, v] of Object.entries(raw)) if (v && typeof v.file === "string") propsCache.set(k, v);
+      } catch {
+        /* absent or corrupt — start empty */
+      }
+    }
+    return propsCache;
+  };
+  const savePropsCache = (): void => {
+    // Only entries with a source file persist; misses (file: "") are session-only
+    // so a component added later isn't shadowed by a stale null.
+    const out: Record<string, PropsCacheEntry> = {};
+    for (const [k, v] of loadPropsCache()) if (v.file) out[k] = v;
+    mkdirSync(join(root, studioDir), { recursive: true });
+    writeFileSync(propsCachePath(), JSON.stringify(out, null, 2) + "\n");
+  };
+  const cacheFresh = (e: PropsCacheEntry): boolean => {
+    if (!e.file) return true; // a session-only miss — evicted by onChange
+    const st = statSync(join(root, e.file), { throwIfNoEntry: false });
+    return !!st && st.mtimeMs === e.mtimeMs;
+  };
+
+  // One persistent extraction worker, lazily spawned; requests correlate by id.
+  // When running from src (tests) the built worker doesn't exist — extract inline.
+  type WorkerResult = { file?: string; props: Record<string, PropSchema> | null; error?: string };
+  const workerPath = fileURLToPath(new URL("../generate/props-worker.js", import.meta.url));
+  let worker: Worker | undefined;
+  let workerSeq = 0;
+  const workerPending = new Map<number, (r: WorkerResult) => void>();
+  const extractInWorker = (config: GenerateConfig, name: string): Promise<WorkerResult> => {
+    if (!existsSync(workerPath)) {
+      const file = locateComponentFile(config, name);
+      return Promise.resolve({ file, props: file ? extractComponentProps(config, name, file) : null });
+    }
+    if (!worker) {
+      worker = new Worker(workerPath);
+      worker.unref(); // don't hold the dev server's process open
+      worker.on("message", (m: { id: number } & WorkerResult) => {
+        workerPending.get(m.id)?.(m);
+        workerPending.delete(m.id);
+      });
+      const died = (why: unknown) => {
+        for (const resolve of workerPending.values()) resolve({ props: null, error: String(why) });
+        workerPending.clear();
+        worker = undefined; // respawn on next request
+      };
+      worker.on("error", died);
+      worker.on("exit", (code) => code !== 0 && died(`worker exited (${code})`));
+    }
+    const id = ++workerSeq;
+    return new Promise((resolve) => {
+      workerPending.set(id, resolve);
+      worker!.postMessage({ id, config, name });
+    });
+  };
+
+  // In-flight dedupe: the panel can ask for the same component twice before the
+  // first extraction lands; don't run the TS checker twice for it.
+  const inflight = new Map<string, Promise<Record<string, PropSchema> | null>>();
+  const componentProps = (name: string): Promise<Record<string, PropSchema> | null> => {
+    const cache = loadPropsCache();
+    const hit = cache.get(name);
+    if (hit && cacheFresh(hit)) return Promise.resolve(hit.props);
+    const running = inflight.get(name);
+    if (running) return running;
+    const p = (async () => {
+      const cfg = (await loadConfig(root).catch(() => ({}))) as { components?: string[]; tsconfig?: string };
+      const { file, props, error } = await extractInWorker(
+        { root, components: cfg.components, tsconfig: cfg.tsconfig },
+        name
+      );
+      if (error) return null; // don't cache a failed extraction
+      const st = file ? statSync(file, { throwIfNoEntry: false }) : undefined;
+      cache.set(name, { file: file && st ? relative(root, file) : "", mtimeMs: st?.mtimeMs ?? 0, props });
+      if (st) savePropsCache();
+      return props;
+    })().finally(() => inflight.delete(name));
+    inflight.set(name, p);
+    return p;
   };
 
   /**
@@ -213,7 +298,12 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
           return;
         }
         if (!/components\/.*\.[jt]sx?$/.test(file)) return;
-        propsCache.clear(); // a component's props may have changed → re-extract on next ask
+        // Evict THIS file's cached schemas (its props may have changed) and any
+        // session-only misses (a new file may now provide the missing name).
+        const cache = loadPropsCache();
+        const rel = relative(root, file);
+        for (const [k, v] of cache) if (v.file === rel || !v.file) cache.delete(k);
+        savePropsCache();
         await syncRegistry(root).catch((e) => server.config.logger.warn(`[cnstudio] ${e}`));
         const mod = server.moduleGraph.getModuleById(resolved(V_REGISTRY));
         if (mod) server.reloadModule(mod);

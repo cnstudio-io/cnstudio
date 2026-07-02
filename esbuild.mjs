@@ -20,6 +20,7 @@ const entryPoints = [
   { in: "src/generate/codegen.ts", out: "generate/codegen" },
   { in: "src/react/EnvProvider.tsx", out: "react/EnvProvider" }, // runtime for generated code (the `./react-web` export)
   { in: "src/generate/cli.ts", out: "generate/cli" }, // the `cnstudio` bin
+  { in: "src/generate/props-worker.ts", out: "generate/props-worker" }, // worker_thread the vite plugin spawns (not an `exports` path)
   { in: "src/engine/index.ts", out: "engine/index" },
 ];
 

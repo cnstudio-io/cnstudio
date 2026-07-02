@@ -58,22 +58,34 @@ export function generateRegistry(config: GenerateConfig = {}): RegistryFile {
 }
 
 /**
- * Lazily extract ONE component's prop schema with the real TS checker — the slow
- * path {@link generateRegistry} skips. Locates the file that exports `name` (last
- * match wins, matching the runtime registry's name-keying), parses just that file,
- * and recovers destructuring defaults (`variant = "default"`) the checker misses.
- * Returns null if no component exports `name`. Called on demand by the dev
- * plugin's `/__cnstudio/props` route when the Properties panel selects a node.
+ * The source file that exports component `name` (last match wins, matching the
+ * runtime registry's name-keying), or undefined when no component exports it.
+ * A cheap Babel scan over the component globs — no TS checker.
  */
-export function extractComponentProps(config: GenerateConfig, name: string): Record<string, PropSchema> | null {
+export function locateComponentFile(config: GenerateConfig, name: string): string | undefined {
   const root = config.root ?? process.cwd();
-  const tsconfig = config.tsconfig ?? DEFAULTS.tsconfig;
   const files = globSync(config.components ?? DEFAULTS.components, { cwd: root, absolute: true });
-
   let target: string | undefined;
   for (const file of files) {
     if (enumerateExports(file).some((c) => c.name === name)) target = file;
   }
+  return target;
+}
+
+/**
+ * Lazily extract ONE component's prop schema with the real TS checker — the slow
+ * path {@link generateRegistry} skips. Locates the file that exports `name` (via
+ * {@link locateComponentFile}; pass `target` to skip that scan), parses just that
+ * file, and recovers destructuring defaults (`variant = "default"`) the checker
+ * misses. Returns null if no component exports `name`. Called on demand by the
+ * dev plugin's `/__cnstudio/props` route when the Properties panel selects a node.
+ */
+export function extractComponentProps(
+  config: GenerateConfig,
+  name: string,
+  target = locateComponentFile(config, name)
+): Record<string, PropSchema> | null {
+  const tsconfig = config.tsconfig ?? DEFAULTS.tsconfig;
   if (!target) return null;
 
   const doc = makeParser(tsconfig)
