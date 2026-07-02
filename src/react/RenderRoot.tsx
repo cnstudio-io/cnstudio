@@ -19,8 +19,7 @@ export function RenderRoot({
     createElement(NodeComponent, {
       name: comp.name,
       instanceProps: {},
-      slot: [],
-      namedSlots: undefined,
+      fills: undefined,
       tagPath: ctx.tagPaths ? [] : null,
       frozen: false,
       activeVariant,

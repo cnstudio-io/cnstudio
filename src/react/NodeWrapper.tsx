@@ -1,8 +1,11 @@
 import { cloneElement, createElement, useContext, type ReactNode } from "react";
 import {
   effectiveProps,
+  fillSlot,
   instanceOf,
+  isComponent,
   pathEquals,
+  slotName,
   type Node,
   type NodePath,
 } from "../engine/model";
@@ -32,10 +35,14 @@ interface NodeWrapperProps {
   freeze: boolean;
   /** The active variant whose overrides apply. */
   activeVariant: string | null;
-  /** The enclosing instance's DEFAULT-slot content (its `children`). */
-  slot: Node[] | undefined;
-  /** The enclosing instance's NAMED-slot content (its `slots`), keyed by slot name. */
-  slots: Record<string, Node[]> | undefined;
+  /**
+   * The enclosing instance's slot content, PRE-RENDERED at the instance site and
+   * keyed by slot name (`""` = the default slot). Fills are authored in the
+   * instancing component, so they must resolve lexically — against that
+   * component's env and its own enclosing fills — not against the scope of the
+   * component whose `Slot` marker mounts them. Only names with content appear.
+   */
+  fills: Record<string, ReactNode> | undefined;
   /** Recursion depth (bounds runaway instance recursion). */
   depth: number;
   [slotted: string]: unknown;
@@ -78,7 +85,7 @@ function resolveProps(
 }
 
 export function NodeWrapper(props: NodeWrapperProps): ReactNode {
-  const { node, tagPath, freeze, activeVariant, slot, slots, depth, ...rest } = props;
+  const { node, tagPath, freeze, activeVariant, fills, depth, ...rest } = props;
   const rc = useContext(RenderContext);
   // The data-binding env ($props/$ctx). Reactivity is plain React: $props flows
   // from parents, $ctx from providers (EnvContext) — both re-render naturally.
@@ -105,19 +112,17 @@ export function NodeWrapper(props: NodeWrapperProps): ReactNode {
       tagPath: childTag,
       freeze,
       activeVariant,
-      slot,
-      slots,
+      fills,
       depth: depth + 1,
     });
 
-  // Slot marker: render the enclosing instance's fill for this slot — the named
-  // slot (`props.name`) from `slots`, or the default slot (`children`) when
-  // unnamed — falling back to the marker's own children as placeholder content.
+  // Slot marker: mount the enclosing instance's pre-rendered fill for this
+  // slot's name (`""` = the default slot), falling back to the marker's own
+  // children as placeholder content when the instance left it empty.
   if (node.type === "Slot") {
-    const name = typeof node.props?.name === "string" ? (node.props.name as string) : undefined;
-    const fill = name ? slots?.[name] : slot;
-    const content = fill && fill.length ? fill : node.children;
-    return content.map((c, i) => childWrapper(c, i, null));
+    const fill = fills?.[slotName(node)];
+    if (fill !== undefined) return fill;
+    return node.children.map((c, i) => childWrapper(c, i, null));
   }
 
   // Loop: `data.map(...)`, rendering this node's children once per element with
@@ -173,11 +178,32 @@ export function NodeWrapper(props: NodeWrapperProps): ReactNode {
   const comp = rc.site ? instanceOf(node, rc.site) : undefined;
   if (comp) {
     const instanceProps = resolveProps(node, activeVariant, env);
+    delete instanceProps.slot; // the routing key, consumed here — never a component prop
+    // Group the instance's children by the slot they fill (the reserved `slot`
+    // prop; no prop = the default slot) and pre-render each group HERE. Fills
+    // are authored in THIS component, so their expressions and any Slot markers
+    // they contain (slot forwarding) resolve lexically — against this env and
+    // this `fills` — not against the instanced component's scope. React context
+    // reads at mount position (inside the instance), so each group is wrapped
+    // in a provider restoring the current env.
+    const groups = new Map<string, ReactNode[]>();
+    node.children.forEach((c, i) => {
+      const bare =
+        isComponent(c) && c.props.slot !== undefined
+          ? { ...c, props: Object.fromEntries(Object.entries(c.props).filter(([k]) => k !== "slot")) }
+          : c;
+      const els = groups.get(fillSlot(c)) ?? [];
+      els.push(childWrapper(bare, i, null));
+      groups.set(fillSlot(c), els);
+    });
+    const instanceFills: Record<string, ReactNode> = {};
+    for (const [name, els] of groups) {
+      instanceFills[name] = createElement(EnvContext.Provider, { key: name, value: env }, ...els);
+    }
     return createElement(NodeComponent, {
       name: node.type,
       instanceProps,
-      slot: node.children,
-      namedSlots: node.slots,
+      fills: instanceFills,
       tagPath,
       frozen: true,
       // Instance internals render at base variant (the active variant is the

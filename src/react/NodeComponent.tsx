@@ -1,6 +1,6 @@
 import { createElement, useContext, type ReactNode } from "react";
-import { type Component, type Node, type NodePath } from "../engine/model";
-import { evalAction, resolveValue, type Env, EnvContext } from "./EnvProvider";
+import { type Component, type NodePath } from "../engine/model";
+import { type Env, EnvContext } from "./EnvProvider";
 import { RenderContext } from "./RenderContext";
 import { NodeWrapper } from "./NodeWrapper";
 
@@ -18,10 +18,11 @@ interface NodeComponentProps {
   name: string;
   /** The instance node's resolved props → `$props`. */
   instanceProps: Record<string, unknown>;
-  /** The instance node's children → the default slot's content. */
-  slot: Node[];
-  /** The instance node's `slots` → named-slot content, keyed by slot name. */
-  namedSlots: Record<string, Node[]> | undefined;
+  /**
+   * The instance's slot content, PRE-RENDERED at the instance site (lexical
+   * scoping) and keyed by slot name (`""` = the default slot).
+   */
+  fills: Record<string, ReactNode> | undefined;
   /** Path shared by the whole instance subtree (or null). */
   tagPath: NodePath | null;
   /** Frozen (nested instance, untagged internals) vs. the editable root. */
@@ -33,7 +34,7 @@ interface NodeComponentProps {
 }
 
 export function NodeComponent(props: NodeComponentProps): ReactNode {
-  const { name, instanceProps, slot, namedSlots, tagPath, frozen, activeVariant, depth } = props;
+  const { name, instanceProps, fills, tagPath, frozen, activeVariant, depth } = props;
   const rc = useContext(RenderContext);
   const parent = useContext(EnvContext);
   const comp: Component | undefined = rc.site?.components.find((c) => c.name === name);
@@ -49,8 +50,7 @@ export function NodeComponent(props: NodeComponentProps): ReactNode {
       tagPath,
       freeze: frozen,
       activeVariant,
-      slot,
-      slots: namedSlots,
+      fills,
       depth,
     })
   );

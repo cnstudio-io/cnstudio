@@ -113,22 +113,81 @@ describe("named slots", () => {
     name: "Page",
     type: "Shell",
     props: {},
-    // Default slot via `children`; named slots via `slots`.
-    children: ["the-body"],
-    slots: { header: ["the-header"] },
+    // ALL fills live in `children`; a fill routes to a named slot via the
+    // reserved `slot` prop (a raw literal name), no prop = the default slot.
+    children: [
+      "the-body",
+      { type: "Box", props: { slot: "header", "data-fill": "'h'" }, children: ["the-header"] },
+    ],
   };
   const html = markup(page, { components: [page, ...site.components] }, { resolveCode });
 
-  it("routes the instance's children to the default slot", () => {
+  it("routes children without a `slot` prop to the default slot", () => {
     expect(html).toContain("the-body");
     expect(html).not.toContain("no-default");
+    expect(html).not.toContain("no-header"); // named fill NOT in the default slot
   });
-  it("routes a named-slot fill to its matching marker", () => {
+  it("routes a `slot`-assigned child to its matching marker, stripping the routing prop", () => {
     expect(html).toContain("the-header");
-    expect(html).not.toContain("no-header");
+    expect(html).toContain('data-fill="h"'); // other props still resolve + render
+    expect(html).not.toContain('slot="header"'); // routing key never reaches the DOM
   });
   it("shows a named slot's placeholder when the instance leaves it empty", () => {
     expect(html).toContain("placeholder-footer");
+  });
+});
+
+// Slot content is authored in the INSTANCING component, so it resolves lexically:
+// a Slot marker passed as a fill forwards THAT component's slot onward (instead
+// of self-filling and recursing to the depth cap), and a fill's expressions read
+// the instancing component's $props (not the instanced component's).
+describe("slot forwarding (lexical fills)", () => {
+  const Box: ComponentType<Record<string, unknown>> = ({ children, ...rest }) =>
+    createElement("div", rest, children as ReactNode);
+  const resolveCode = (t: string) => (t === "Box" ? Box : undefined);
+
+  const site: Site = {
+    components: [
+      {
+        // Inner declares a slot…
+        name: "Inner",
+        type: "Box",
+        props: {},
+        children: [{ type: "Slot", props: {}, children: ["inner-placeholder"] }],
+      },
+      {
+        // …Wrap instantiates Inner and FORWARDS its own slot into it, and also
+        // fills a Box with one of its own props.
+        name: "Wrap",
+        type: "Custom",
+        props: {},
+        children: [
+          {
+            type: "Inner",
+            props: {},
+            children: [
+              { type: "Slot", props: {}, children: [] },
+              { type: "Box", props: { "data-from": "$props.tag" }, children: [] },
+            ],
+          },
+        ],
+      },
+      {
+        name: "Page",
+        type: "Custom",
+        props: {},
+        children: [{ type: "Wrap", props: { tag: "'wrap-scope'" }, children: ["forwarded-content"] }],
+      },
+    ],
+  };
+  const html = markup(site.components[2], site, { resolveCode });
+
+  it("renders forwarded slot content instead of recursing to the depth cap", () => {
+    expect(html).toContain("forwarded-content");
+    expect(html).not.toContain("inner-placeholder");
+  });
+  it("resolves a fill's expressions against the component that authored it", () => {
+    expect(html).toContain('data-from="wrap-scope"');
   });
 });
 

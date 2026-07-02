@@ -65,6 +65,59 @@ describe("web target", () => {
   });
 });
 
+describe("named slots", () => {
+  // Shell declares a named "header" slot plus the default slot; Page instances
+  // it, routing one child to "header" via the reserved `slot` prop.
+  const slotted: Site = {
+    components: [
+      {
+        name: "Shell",
+        type: "Custom",
+        props: {},
+        children: [
+          { type: "Slot", props: { name: "header" }, children: [] },
+          { type: "Slot", props: {}, children: [] },
+        ],
+      },
+      {
+        name: "Page",
+        type: "Custom",
+        props: {},
+        children: [
+          {
+            type: "Shell",
+            props: {},
+            children: [
+              { type: ICON, props: { slot: "header", src: "'/a.png'" }, children: [] },
+              "body",
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const files = web({ out: "./d" }).generate(slotted, { root: "/x", registry });
+  const shell = files.find((f) => f.path === "Shell.tsx")!;
+  const page = files.find((f) => f.path === "Page.tsx")!;
+
+  it("emits pickSlot filters for every marker once any marker is named", () => {
+    expect(shell.content).toContain('{pickSlot($props.children, "header")}');
+    expect(shell.content).toContain('{pickSlot($props.children, "")}');
+    expect(shell.content).not.toContain("{$props.children}");
+    expect(shell.content).toContain('import { pickSlot } from "@cnstudio-io/cnstudio/react-web";');
+  });
+
+  it("emits the routing prop as a literal string attribute, not an expression", () => {
+    expect(page.content).toContain('slot={"header"}');
+  });
+
+  it("keeps the plain children passthrough for a default-slot-only component", () => {
+    const [file] = web({ out: "./d" }).generate(site, { root: "/x", registry });
+    expect(file.content).toContain("{$props.children}");
+    expect(file.content).not.toContain("pickSlot");
+  });
+});
+
 describe("invalid nodes", () => {
   it("rejects a raw host tag — a node must instance a registered component", () => {
     const bad: Site = {

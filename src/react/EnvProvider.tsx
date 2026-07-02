@@ -1,4 +1,13 @@
-import { createContext, createElement, type ReactNode, useContext } from "react";
+import {
+  Children,
+  cloneElement,
+  createContext,
+  createElement,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+  useContext,
+} from "react";
 import { effectiveProps as engineEffectiveProps, type Node } from "../engine/model";
 
 /**
@@ -113,6 +122,29 @@ export function useDataEnv(): Record<string, any> {
 // runtime merges them into its registry — so codegen emits an import from here
 // rather than from project source (they ship with cnstudio, not the project).
 export { DomElement, HorizontalStack, VerticalStack } from "../primitives";
+
+/**
+ * A generated component's slot filter. cnstudio routes slot content by the
+ * reserved `slot` prop on an instance's children: codegen emits each named
+ * `Slot` marker as `{pickSlot($props.children, "name")}` and the fills as JSX
+ * children carrying `slot="name"`. This picks the children whose `slot`
+ * matches (`""` = the default slot: children with no `slot`), stripping the
+ * routing prop so it never reaches the DOM.
+ */
+export function pickSlot(children: ReactNode, name: string): ReactNode {
+  const slotOf = (c: ReactNode): string => {
+    if (!isValidElement(c)) return "";
+    const s = (c.props as Record<string, unknown>).slot;
+    return typeof s === "string" ? s : "";
+  };
+  return Children.toArray(children)
+    .filter((c) => slotOf(c) === name)
+    .map((c) =>
+      isValidElement(c) && (c.props as Record<string, unknown>).slot !== undefined
+        ? cloneElement(c as ReactElement<{ slot?: string }>, { slot: undefined })
+        : c
+    );
+}
 
 /**
  * Merge a node's base props with the active variant's overrides (the codegen

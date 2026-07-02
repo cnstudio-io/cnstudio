@@ -36,18 +36,15 @@ export type Node =
        */
       props: Record<string, unknown>;
       /**
-       * The DEFAULT slot's content (component instances and literal text). A
-       * special structured field — not a prop — alongside {@link slots}.
+       * The instance's slot content (component instances and literal text). ALL
+       * fills live here — there is no parallel named-slot field. A child routes to
+       * a named slot via the reserved `slot` prop (`{ props: { slot: "header" } }`);
+       * a child without one fills the default (unnamed) slot. Where each slot
+       * renders is marked in the component's definition by a slot-marker node
+       * (`{ type: "Slot", props: { name } }`). Both `slot` and a marker's `name`
+       * are RAW literal strings, not prop expressions.
        */
       children: Node[];
-      /**
-       * Named-slot content: slot name → the nodes filling it. A special structured
-       * field (like {@link children}, the default slot) holding an instance's fills
-       * for the named slots its component declares. Where each named slot renders is
-       * marked in the component's definition by a slot-marker node
-       * (`{ type: "Slot", props: { name } }`).
-       */
-      slots?: Record<string, Node[]>;
       /** Per-variant prop overrides: variant name → props that override the base. */
       variants?: Record<string, Record<string, unknown>>;
     };
@@ -113,12 +110,19 @@ export function parseNode(value: unknown): Node {
         : {};
     const children = Array.isArray(v.children) ? v.children.map(parseNode) : [];
     const node: Exclude<Node, string> = { type: v.type, props, children };
+    // Legacy named-slot record (pre-0.3.6): fold each fill back into `children`
+    // with the routing prop, so old documents keep their named-slot content.
     if (v.slots && typeof v.slots === "object") {
-      const slots: Record<string, Node[]> = {};
       for (const [name, fill] of Object.entries(v.slots as Record<string, unknown>)) {
-        if (Array.isArray(fill)) slots[name] = fill.map(parseNode);
+        if (!Array.isArray(fill)) continue;
+        for (const f of fill.map(parseNode)) {
+          node.children.push(
+            typeof f === "string"
+              ? { type: "Custom", props: { slot: name }, children: [f] }
+              : { ...f, props: { ...f.props, slot: name } }
+          );
+        }
       }
-      if (Object.keys(slots).length) node.slots = slots;
     }
     if (v.variants && typeof v.variants === "object") {
       node.variants = v.variants as Exclude<Node, string>["variants"];
@@ -136,11 +140,6 @@ export function serializeNode(n: Node): unknown {
     props: n.props,
     children: n.children.map(serializeNode),
   };
-  if (n.slots) {
-    out.slots = Object.fromEntries(
-      Object.entries(n.slots).map(([name, fill]) => [name, fill.map(serializeNode)])
-    );
-  }
   if (n.variants) out.variants = n.variants;
   return out;
 }
@@ -200,6 +199,22 @@ export function isContainer(n: Node): boolean {
 /** A slot placeholder inside a component's tree. */
 export function isSlot(n: Node): boolean {
   return isComponent(n) && n.type === "Slot";
+}
+
+/**
+ * A slot marker's name — a RAW literal string on `props.name` (not an
+ * expression). `""` is the default (unnamed) slot.
+ */
+export function slotName(n: Node): string {
+  return isComponent(n) && typeof n.props.name === "string" ? n.props.name : "";
+}
+
+/**
+ * The slot an instance child fills — the reserved `slot` prop, a RAW literal
+ * string (not an expression). `""` routes to the default (unnamed) slot.
+ */
+export function fillSlot(n: Node): string {
+  return isComponent(n) && typeof n.props.slot === "string" ? n.props.slot : "";
 }
 
 /** Whether `n` is an instance of a component in `site` (type = a component name). */

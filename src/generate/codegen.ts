@@ -209,6 +209,9 @@ interface Ctx {
   p: Platform;
   /** Local JSX name per code-component node type (a registry id) — see {@link localNameFor}. */
   locals: Map<string, string>;
+  /** The component declares a NAMED slot, so every marker emits a `pickSlot`
+   * filter over `$props.children` (set after {@link collect}, read in the emit). */
+  namedSlots?: boolean;
 }
 
 /** Renderable built-in primitives — emitted as imports from the cnstudio runtime
@@ -294,6 +297,9 @@ interface Collected {
   exprs: string[];
   /** Whether a `<slot>` appears (so `$props.children` is referenced). */
   hasSlot: boolean;
+  /** The names of the Slot markers found (`""` = the default slot). Any named
+   * marker switches the component to `pickSlot`-filtered emission. */
+  slotNames: Set<string>;
   /** Whether any node carries variant overrides (so `$props.activeVariant` is read). */
   hasVariants: boolean;
   /** Whether a `Loop` appears (so `Fragment` is imported for the keyed iterations). */
@@ -380,11 +386,15 @@ function computeParts(comp: Component, ctx: Ctx): ComponentParts {
     codeComponents: new Map(),
     exprs: [],
     hasSlot: false,
+    slotNames: new Set(),
     hasVariants: false,
     hasLoop: false,
   };
   // A component IS its root node — walk it directly.
   collect(comp, ctx, meta, false);
+  // Any NAMED marker means the children must be routed, so every marker in this
+  // component (the unnamed default included) emits a `pickSlot` filter.
+  ctx.namedSlots = [...meta.slotNames].some((n) => n !== "");
   const tree = nodeToJsx(comp, ctx, 4, false, false);
 
   const refersTo = (v: string) => meta.exprs.some((e) => e.includes(v));
@@ -402,6 +412,7 @@ function computeParts(comp: Component, ctx: Ctx): ComponentParts {
   const rt: string[] = [];
   if (needsCtx) rt.push("useDataEnv");
   if (meta.hasVariants) rt.push("applyVariant");
+  if (meta.hasSlot && ctx.namedSlots) rt.push("pickSlot");
   if (rt.length) imports += `import { ${rt.sort().join(", ")} } from "@cnstudio-io/cnstudio/react-web";\n`;
   if (imports) imports += "\n"; // blank line before the component, baked into the hole
 
@@ -452,7 +463,12 @@ function collect(node: Node, ctx: Ctx, out: Collected, inText: boolean): void {
     if (ctx.p.wrapText && !inText) out.hostTags.add("Text");
     return;
   }
-  if (node.type === "Slot") { out.hasSlot = true; return; }
+  if (node.type === "Slot") {
+    out.hasSlot = true;
+    // A marker's `name` is a RAW literal string ("" = the default slot).
+    out.slotNames.add(typeof node.props.name === "string" ? node.props.name : "");
+    return;
+  }
 
   // Loop is engine-handled (no component to import); its `data` prop is an
   // expression and its children are the per-iteration template.
@@ -498,8 +514,15 @@ function nodeToJsx(node: Node, ctx: Ctx, indent: number, inText: boolean, inLoop
     return p.wrapText && !inText ? `${pad}<Text>${t}</Text>` : `${pad}${t}`;
   }
 
-  // Slot placeholder → render the passed children.
-  if (node.type === "Slot") return `${pad}{$props.children}`;
+  // Slot placeholder → render the passed children. A component with any NAMED
+  // marker routes: each marker filters `$props.children` by the reserved `slot`
+  // prop via `pickSlot` (`""` = the default slot). With only the unnamed marker
+  // the children pass through whole, as before.
+  if (node.type === "Slot") {
+    if (!ctx.namedSlots) return `${pad}{$props.children}`;
+    const name = typeof node.props.name === "string" ? node.props.name : "";
+    return `${pad}{pickSlot($props.children, ${JSON.stringify(name)})}`;
+  }
 
   // Loop → `data.map(...)`, the children rendered once per element with the
   // element bound under `$loop.<name>` (`.current` / `.index` / `.all`) —
@@ -647,6 +670,9 @@ function valueCode(key: string, value: unknown): string {
       const param = /\bevent\b/.test(value) ? "event: any" : "";
       return `(${param}) => { ${value} }`;
     }
+    // The reserved slot-routing prop is a RAW literal name, not an expression —
+    // the enclosing component's `pickSlot` filter reads it off the element.
+    if (key === "slot") return JSON.stringify(value);
     return value;
   }
   return JSON.stringify(value);
