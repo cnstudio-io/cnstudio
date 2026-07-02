@@ -277,12 +277,50 @@ function localNameFor(type: string, spec: ImportSpec, ctx: Ctx): string {
   if (cached) return cached;
   const taken = new Set<string>([
     ...ctx.locals.values(),
-    ...ctx.site.components.map((c) => c.name),
+    ...ctx.site.components.map((c) => jsName(c.name)),
   ]);
   let local = spec.name;
   for (let i = 2; taken.has(local); i++) local = `${spec.name}$${i}`;
   ctx.locals.set(type, local);
   return local;
+}
+
+/**
+ * A design component's name as a JS identifier. Names may be PATH-LIKE
+ * (`page/calendar`) — the path shapes the generated file's location
+ * (`page/calendar.tsx`); the exported function is the sanitized basename
+ * (`calendar`).
+ */
+function jsName(name: string): string {
+  const base = name.split("/").pop()!.replace(/[^A-Za-z0-9_$]/g, "_") || "_";
+  return /^[0-9]/.test(base) ? `_${base}` : base;
+}
+
+/**
+ * The local JSX identifier a design-component instance renders as — the
+ * target's {@link jsName}, suffixed when two components (or a code component)
+ * share a basename in one file. Cached on {@link Ctx.locals} (keys never clash
+ * with code components' — registry ids always contain `#`).
+ */
+function modelLocalFor(type: string, ctx: Ctx): string {
+  const cached = ctx.locals.get(type);
+  if (cached) return cached;
+  const taken = new Set(ctx.locals.values());
+  const base = jsName(type);
+  let local = base;
+  for (let i = 2; taken.has(local); i++) local = `${base}$${i}`;
+  ctx.locals.set(type, local);
+  return local;
+}
+
+/**
+ * The import specifier from one generated component's file to another's —
+ * relative, accounting for the path-like depth of the importing component
+ * (`page/calendar` importing `AppShell` → `../AppShell`).
+ */
+function relModule(from: string, to: string): string {
+  const depth = from.split("/").length - 1;
+  return depth === 0 ? `./${to}` : `${"../".repeat(depth)}${to}`;
 }
 
 /** What the tree walk collects, so the file header can be assembled correctly. */
@@ -406,7 +444,10 @@ function computeParts(comp: Component, ctx: Ctx): ComponentParts {
   if (meta.hasLoop) imports += `import { Fragment } from "react";\n`;
   imports += importCodeComponents(meta.codeComponents);
   for (const name of [...meta.modelComponents].sort()) {
-    imports += `import { ${name} } from "./${name}";\n`;
+    const local = modelLocalFor(name, ctx);
+    const exported = jsName(name);
+    const spec = exported === local ? local : `${exported} as ${local}`;
+    imports += `import { ${spec} } from "${relModule(comp.name, name)}";\n`;
   }
   imports += ctx.p.hostImports(meta.hostTags);
   const rt: string[] = [];
@@ -422,7 +463,9 @@ function computeParts(comp: Component, ctx: Ctx): ComponentParts {
   if (needsCtx) setup += `  const $ctx: Record<string, any> = useDataEnv();\n`;
 
   return {
-    name: comp.name,
+    // The exported function's identifier — the sanitized basename of a
+    // path-like name (the path lives in the FILE location, not the export).
+    name: jsName(comp.name),
     imports,
     propsSig,
     setup,
@@ -481,8 +524,10 @@ function collect(node: Node, ctx: Ctx, out: Collected, inText: boolean): void {
 
   const cls = classify(node.type, ctx);
   let childInText = false;
-  if (cls.kind === "instance") out.modelComponents.add(node.type);
-  else if (cls.kind === "code") out.codeComponents.set(localNameFor(node.type, cls.spec, ctx), cls.spec);
+  if (cls.kind === "instance") {
+    out.modelComponents.add(node.type);
+    modelLocalFor(node.type, ctx); // reserve the local in walk order
+  } else if (cls.kind === "code") out.codeComponents.set(localNameFor(node.type, cls.spec, ctx), cls.spec);
   else {
     // The reserved `Custom` wrapper (div / View).
     out.hostTags.add(ctx.p.wrapperTag);
@@ -586,7 +631,7 @@ function nodeToJsx(node: Node, ctx: Ctx, indent: number, inText: boolean, inLoop
     ? p.wrapperTag
     : cls.kind === "code"
       ? localNameFor(node.type, cls.spec, ctx)
-      : node.type;
+      : modelLocalFor(node.type, ctx);
   const childInText = isWrapper ? p.wrapperHoldsText : false;
 
   const attrs = node.variants ? variantAttrs(node, p) : propsToJsx(node.props, p);

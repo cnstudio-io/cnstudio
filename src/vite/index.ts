@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import type { Plugin } from "vite";
 import { syncRegistry, loadConfig, SITE_FILE, REGISTRY_FILE } from "../generate/cli";
 import { extractComponentProps } from "../generate/index";
@@ -76,6 +76,11 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
   const pagesDir = options.pages;
   const pagesAbs = () => join(root, pagesDir!);
   const isPageId = (id: string) => !!pagesDir && id.split("?")[0].startsWith(pagesAbs() + "/");
+  // A page id's component name: its path under the pages dir, extension
+  // stripped. Component names may be PATH-LIKE (`page/calendar` →
+  // `<pagesDir>/page/calendar.tsx`), so this is NOT just the basename.
+  const pageName = (id: string): string =>
+    relative(pagesAbs(), id.split("?")[0]).replace(/\.(tsx|ts|jsx|js)$/, "");
   /** Generate one design page's `.tsx`, write it to disk (for visibility), return its source. */
   const generatePage = (name: string): string | null => {
     const site = parseSite(readSite());
@@ -85,7 +90,7 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
     const dest = join(pagesAbs(), `${name}.tsx`);
     // Only write when changed — rewriting identical content would churn the watcher.
     if (!existsSync(dest) || readFileSync(dest, "utf8") !== file.content) {
-      mkdirSync(pagesAbs(), { recursive: true });
+      mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, file.content);
     }
     return file.content;
@@ -150,8 +155,8 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
       // under the pages dir) — claim it with a `.tsx` extension even when no file
       // exists yet, so `load` can generate it on first request.
       if (isPageId(id)) {
-        const name = basename(id.split("?")[0]).replace(/\.(tsx|ts|jsx|js)$/, "");
-        if (name) return join(pagesAbs(), `${name}.tsx`);
+        const name = pageName(id);
+        if (name && !name.startsWith("..")) return join(pagesAbs(), `${name}.tsx`);
       }
     },
 
@@ -192,7 +197,7 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
       }
       // Lazily codegen a design page on first import (and on every site change).
       if (isPageId(id) && id.split("?")[0].endsWith(".tsx")) {
-        const src = generatePage(basename(id.split("?")[0], ".tsx"));
+        const src = generatePage(pageName(id));
         if (src != null) return src;
       }
     },

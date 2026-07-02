@@ -144,6 +144,46 @@ describe("named slots", () => {
   });
 });
 
+describe("path-like component names", () => {
+  // A page named `page/calendar` emits to `page/calendar.tsx`, exports the
+  // sanitized basename, and reaches a root-level sibling via `../`.
+  const paged: Site = {
+    components: [
+      {
+        name: "AppShell",
+        type: "Custom",
+        props: {},
+        children: [{ type: "Slot", props: { name: "main" }, children: [] }],
+      },
+      {
+        name: "page/calendar",
+        type: "Custom",
+        props: {},
+        children: [
+          {
+            type: "AppShell",
+            props: {},
+            children: [{ type: ICON, props: { slot: "main" }, children: [] }],
+          },
+        ],
+      },
+    ],
+  };
+  const files = web({ out: "./d" }).generate(paged, { root: "/x", registry });
+
+  it("emits the file under the path and exports the basename", () => {
+    const page = files.find((f) => f.path === "page/calendar.tsx")!;
+    expect(page).toBeDefined();
+    expect(page.content).toContain("export function calendar(");
+  });
+
+  it("imports a sibling design component relative to the page's depth", () => {
+    const page = files.find((f) => f.path === "page/calendar.tsx")!;
+    expect(page.content).toContain('import { AppShell } from "../AppShell";');
+    expect(page.content).toContain("<AppShell>");
+  });
+});
+
 describe("invalid nodes", () => {
   it("rejects a raw host tag — a node must instance a registered component", () => {
     const bad: Site = {
