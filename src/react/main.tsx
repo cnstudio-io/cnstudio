@@ -1,13 +1,13 @@
 import { createRoot } from "react-dom/client";
 import { toPng } from "html-to-image";
 import { CanvasHost } from "./CanvasHost";
-import { DataProvider } from "./DataProvider";
+import { EnvProvider } from "./EnvProvider";
 import { host, isCaptureMsg, isRenderMsg, render, type HostMsgInput, type RenderMsg } from "../engine/protocol";
 import "./host.css";
 
 // Example `$ctx` the Vite plugin injects from `.studio/dev-context.json` so the
 // canvas renders `$ctx`-reading components (which call `useDataEnv()`) with
-// realistic data while editing. Provided via `<DataProvider>` around the host.
+// realistic data while editing. Provided via `<EnvProvider>` around the host.
 const DEV_CTX: Record<string, unknown> =
   (window as unknown as { __CNSTUDIO_DEVCTX__?: Record<string, unknown> }).__CNSTUDIO_DEVCTX__ ?? {};
 
@@ -101,9 +101,9 @@ export function mount(el: HTMLElement) {
     lastRev = msg.rev;
     interactive = msg.interactive;
     root.render(
-      <DataProvider value={DEV_CTX}>
+      <EnvProvider ctx={DEV_CTX}>
         <CanvasHost msg={msg} post={post} />
-      </DataProvider>
+      </EnvProvider>
     );
   });
 
@@ -189,9 +189,9 @@ function mountStandalone(el: HTMLElement, std: Standalone) {
     interactive: true,
   });
   createRoot(el).render(
-    <DataProvider value={DEV_CTX}>
+    <EnvProvider ctx={DEV_CTX}>
       <CanvasHost msg={msg} post={() => {}} />
-    </DataProvider>
+    </EnvProvider>
   );
 }
 

@@ -12,9 +12,12 @@ import type { RegistryFile } from "../engine/schema";
 // a node always instances a registered component, never a raw host tag.
 const registry: RegistryFile = {
   components: {
-    Icon: { import: { module: "@/components/ui/icon", name: "Icon" }, props: {} },
+    "@/components/ui/icon#Icon": { import: { module: "@/components/ui/icon", name: "Icon" }, props: {} },
   },
 };
+// Code components are addressed by their registry id (`@/module#Export`); bare
+// names are the design's own namespace.
+const ICON = "@/components/ui/icon#Icon";
 const site: Site = {
   components: [
     {
@@ -25,7 +28,7 @@ const site: Site = {
       props: { title: "$props.title", onClick: "$ctx.toggle()" },
       children: [
         "Hello",
-        { type: "Icon", props: { src: "'/a.png'" }, children: [] },
+        { type: ICON, props: { src: "'/a.png'" }, children: [] },
         { type: "Slot", props: {}, children: [] },
       ],
     },
@@ -70,7 +73,7 @@ describe("invalid nodes", () => {
       ],
     };
     expect(() => web({ out: "./d" }).generate(bad, { root: "/x" })).toThrow(
-      /<div>: not a registered component/
+      /<div>: not a design component/
     );
   });
 });
@@ -78,7 +81,7 @@ describe("invalid nodes", () => {
 describe("code-component imports", () => {
   const registry: RegistryFile = {
     components: {
-      Button: { import: { module: "@/components/ui/button", name: "Button" }, props: {} },
+      "@/components/ui/button#Button": { import: { module: "@/components/ui/button", name: "Button" }, props: {} },
     },
   };
   const withButton: Site = {
@@ -87,7 +90,7 @@ describe("code-component imports", () => {
         name: "Bar",
         type: "Custom",
         props: {},
-        children: [{ type: "Button", props: { variant: "'ghost'" }, children: ["Go"] }],
+        children: [{ type: "@/components/ui/button#Button", props: { variant: "'ghost'" }, children: ["Go"] }],
       },
     ],
   };
@@ -96,6 +99,74 @@ describe("code-component imports", () => {
     const [file] = web({ out: "./d" }).generate(withButton, { root: "/x", registry });
     expect(file.content).toContain('import { Button } from "@/components/ui/button";');
     expect(file.content).toContain("<Button variant={'ghost'}>");
+  });
+});
+
+describe("name resolution", () => {
+  it("rejects a bare code-component export name — code components are addressed by registry id", () => {
+    const bare: Site = {
+      components: [
+        { name: "Card", type: "Custom", props: {}, children: [{ type: "Icon", props: {}, children: [] }] },
+      ],
+    };
+    expect(() => web({ out: "./d" }).generate(bare, { root: "/x", registry })).toThrow(
+      /<Icon>: not a design component/
+    );
+  });
+
+  it("lets a design component share a code component's export name without colliding", () => {
+    const reg: RegistryFile = {
+      components: {
+        "@/components/ui/card#Card": { import: { module: "@/components/ui/card", name: "Card" }, props: {} },
+      },
+    };
+    const shadow: Site = {
+      components: [
+        // The design's own "Card" — a bare reference resolves here…
+        { name: "Card", type: "Custom", props: {}, children: [] },
+        {
+          name: "Page",
+          type: "Custom",
+          props: {},
+          children: [
+            { type: "Card", props: {}, children: [] },
+            // …while the code component is addressed by id and gets an alias.
+            { type: "@/components/ui/card#Card", props: {}, children: [] },
+          ],
+        },
+      ],
+    };
+    const files = web({ out: "./d" }).generate(shadow, { root: "/x", registry: reg });
+    const page = files.find((f) => f.path === "Page.tsx")!;
+    expect(page.content).toContain('import { Card } from "./Card";');
+    expect(page.content).toContain('import { Card as Card$2 } from "@/components/ui/card";');
+    expect(page.content).toContain("<Card />");
+    expect(page.content).toContain("<Card$2 />");
+  });
+
+  it("aliases same-named exports from different modules", () => {
+    const reg: RegistryFile = {
+      components: {
+        "@/a#Icon": { import: { module: "@/a", name: "Icon" }, props: {} },
+        "@/b#Icon": { import: { module: "@/b", name: "Icon" }, props: {} },
+      },
+    };
+    const two: Site = {
+      components: [
+        {
+          name: "Pair",
+          type: "Custom",
+          props: {},
+          children: [
+            { type: "@/a#Icon", props: {}, children: [] },
+            { type: "@/b#Icon", props: {}, children: [] },
+          ],
+        },
+      ],
+    };
+    const [f] = web({ out: "./d" }).generate(two, { root: "/x", registry: reg });
+    expect(f.content).toContain('import { Icon } from "@/a";');
+    expect(f.content).toContain('import { Icon as Icon$2 } from "@/b";');
   });
 });
 
@@ -119,6 +190,88 @@ describe("variants", () => {
     expect(file.content).toContain(
       '{...applyVariant({ "className": \'box\' }, $props.activeVariant, { "active": { "className": \'box on\' } })}'
     );
+  });
+});
+
+describe("loops", () => {
+  const loopSite: Site = {
+    components: [
+      {
+        name: "List",
+        type: "Custom",
+        props: {},
+        children: [
+          {
+            type: "Loop",
+            props: { data: "$ctx.groups", name: "group" },
+            children: [
+              { type: ICON, props: { title: "$loop.group.current.label" }, children: [] },
+              {
+                type: "Loop",
+                props: { data: "$loop.group.current.children", name: "leaf" },
+                children: [
+                  { type: ICON, props: { title: "$loop.leaf.current.label" }, children: [] },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const [file] = web({ out: "./d" }).generate(loopSite, { root: "/x", registry });
+
+  it("emits data.map with $loop bound under the loop name", () => {
+    expect(file.content).toContain('import { Fragment } from "react";');
+    expect(file.content).toContain("(Array.isArray(__data) ? __data : []).map((current: any, index: number, all: any[])");
+    expect(file.content).toContain('const $loop: Record<string, any> = { ...__outer, "group": { current, index, all } };');
+    expect(file.content).toContain("title={$loop.group.current.label}");
+    expect(file.content).toContain("<Fragment key={index}>");
+  });
+
+  it("threads the enclosing $loop into a nested loop (outer env is {} at the top)", () => {
+    expect(file.content).toContain("}))($ctx.groups, {})}");
+    expect(file.content).toContain("}))($loop.group.current.children, $loop)}");
+    expect(file.content).toContain('{ ...__outer, "leaf": { current, index, all } }');
+  });
+
+  it("skips the $loop binding when the template never reads it", () => {
+    const staticLoop: Site = {
+      components: [
+        {
+          name: "Dots",
+          type: "Custom",
+          props: {},
+          children: [
+            { type: "Loop", props: { data: "$ctx.items" }, children: [{ type: ICON, props: {}, children: [] }] },
+          ],
+        },
+      ],
+    };
+    const [f] = web({ out: "./d" }).generate(staticLoop, { root: "/x", registry });
+    expect(f.content).not.toContain("const $loop");
+    expect(f.content).toContain(".map((_current: any, index: number) => (");
+  });
+});
+
+describe("hidden", () => {
+  it("emits a conditional render mirroring the runtime, not a DOM attribute", () => {
+    const hiddenSite: Site = {
+      components: [
+        {
+          name: "Maybe",
+          type: "Custom",
+          props: {},
+          children: [
+            { type: ICON, props: { hidden: "$ctx.items.length === 0", src: "'/a.png'" }, children: [] },
+          ],
+        },
+      ],
+    };
+    const [f] = web({ out: "./d" }).generate(hiddenSite, { root: "/x", registry });
+    expect(f.content).toContain("{!($ctx.items.length === 0) && (");
+    expect(f.content).toContain("<Icon src={'/a.png'} />");
+    expect(f.content).not.toContain("hidden=");
   });
 });
 

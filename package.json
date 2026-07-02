@@ -20,7 +20,7 @@
     "./react.css": "./dist/react/main.css",
     "./generate": "./dist/generate/index.js",
     "./codegen": "./dist/generate/codegen.js",
-    "./react-web": "./dist/react/react-web.js",
+    "./react-web": "./dist/react/EnvProvider.js",
     "./engine": "./dist/engine/index.js",
     "./schemas/*": "./schemas/*"
   },

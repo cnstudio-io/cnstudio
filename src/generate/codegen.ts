@@ -207,6 +207,8 @@ interface Ctx {
   site: Site;
   registry?: RegistryFile;
   p: Platform;
+  /** Local JSX name per code-component node type (a registry id) — see {@link localNameFor}. */
+  locals: Map<string, string>;
 }
 
 /** Renderable built-in primitives — emitted as imports from the cnstudio runtime
@@ -222,30 +224,62 @@ type Kind =
   | { kind: "wrapper" };
 
 function classify(type: string, ctx: Ctx): Kind {
+  // A QUALIFIED name (`@/path/to/module#Export`) is a registry id — a code
+  // component. Code and design components live in separate namespaces: qualified
+  // names address the registry, bare names the design's own components. A
+  // qualified name that isn't in the registry is an error, never a fallthrough.
+  if (type.includes("#")) {
+    const meta = ctx.registry?.components?.[type];
+    if (!meta) {
+      throw new Error(
+        `cannot generate <${type}>: not in the component registry ` +
+          "(qualified `@/module#Export` node types must match a registry id)."
+      );
+    }
+    return { kind: "code", spec: meta.import };
+  }
+  // BARE names resolve against the design's own components…
   if (instanceOf({ type, props: {}, children: [] }, ctx.site)) return { kind: "instance" };
-  // The registry is keyed by a unique id, so match a node's `type` against the
-  // export name (the design references components by bare name).
-  const meta = Object.values(ctx.registry?.components ?? {}).find((m) => m.import.name === type);
-  if (meta) return { kind: "code", spec: meta.import };
-  // Built-in layout primitives ship with cnstudio (not the project) and aren't in
-  // registry.json — they're merged into the runtime registry only. Emit them as
-  // code components imported from the cnstudio runtime so the design can place
-  // them anywhere without the project registering anything. (`Slot`/`Loop` are
-  // engine-handled — see nodeToJsx — and never reach here.)
+  // …and the built-in layout primitives, which ship with cnstudio (not the
+  // project) and aren't in registry.json — they're merged into the runtime
+  // registry only. Emit them as code components imported from the cnstudio
+  // runtime so the design can place them anywhere without the project
+  // registering anything. (`Slot`/`Loop` are engine-handled — see nodeToJsx —
+  // and never reach here.)
   if (RUNTIME_PRIMITIVES.has(type)) {
     return { kind: "code", spec: { module: "@cnstudio-io/cnstudio/react-web", name: type } };
   }
-  // The ONLY non-component type a valid model carries is the reserved `Custom`
-  // (a UI-created component's root), emitted as the platform wrapper element. Any
-  // other `type` is a raw host tag (`div`, `span`, `img`, …) — NOT a valid node
-  // (the editor's `assertType` can never create one). Fail the build rather than
-  // emit a bogus host element from a hand-edited / corrupt site.json.
+  // The ONLY other type a valid model carries is the reserved `Custom` (a
+  // UI-created component's root), emitted as the platform wrapper element.
+  // Anything else — a raw host tag (`div`, `span`, …) or a code component
+  // referenced by bare export name — is NOT a valid node. Fail the build rather
+  // than emit something ambiguous from a hand-edited / corrupt site.json.
   if (type === "Custom") return { kind: "wrapper" };
   throw new Error(
-    `cannot generate <${type}>: not a registered component. A node may only ` +
-      "instance a component from the registry (or the reserved `slot`); raw HTML " +
-      "tags are not valid node types."
+    `cannot generate <${type}>: not a design component. Bare node types resolve ` +
+      "against the design's own components (and built-in primitives); a code " +
+      "component is addressed by its registry id (`@/module#Export`)."
   );
+}
+
+/**
+ * The local JSX identifier a code-component node type renders as — its export
+ * name, suffixed (`Icon$2`) when two different modules export the same name in
+ * one file, and never colliding with a design component's `./Name` import.
+ * Cached on {@link Ctx.locals}, so `collect` and `nodeToJsx` (which walk in the
+ * same order) agree.
+ */
+function localNameFor(type: string, spec: ImportSpec, ctx: Ctx): string {
+  const cached = ctx.locals.get(type);
+  if (cached) return cached;
+  const taken = new Set<string>([
+    ...ctx.locals.values(),
+    ...ctx.site.components.map((c) => c.name),
+  ]);
+  let local = spec.name;
+  for (let i = 2; taken.has(local); i++) local = `${spec.name}$${i}`;
+  ctx.locals.set(type, local);
+  return local;
 }
 
 /** What the tree walk collects, so the file header can be assembled correctly. */
@@ -262,6 +296,8 @@ interface Collected {
   hasSlot: boolean;
   /** Whether any node carries variant overrides (so `$props.activeVariant` is read). */
   hasVariants: boolean;
+  /** Whether a `Loop` appears (so `Fragment` is imported for the keyed iterations). */
+  hasLoop: boolean;
 }
 
 /**
@@ -282,7 +318,8 @@ export function makeFiles(
   return site.components.map((comp) => ({
     path: `${comp.name}${suffix}.tsx`,
     content:
-      BANNER + render(computeParts(comp, { site, registry: ctx.registry, p })),
+      BANNER +
+      render(computeParts(comp, { site, registry: ctx.registry, p, locals: new Map() })),
   }));
 }
 
@@ -344,10 +381,11 @@ function computeParts(comp: Component, ctx: Ctx): ComponentParts {
     exprs: [],
     hasSlot: false,
     hasVariants: false,
+    hasLoop: false,
   };
   // A component IS its root node — walk it directly.
   collect(comp, ctx, meta, false);
-  const tree = nodeToJsx(comp, ctx, 4, false);
+  const tree = nodeToJsx(comp, ctx, 4, false, false);
 
   const refersTo = (v: string) => meta.exprs.some((e) => e.includes(v));
   const needsCtx = refersTo("$ctx");
@@ -355,6 +393,7 @@ function computeParts(comp: Component, ctx: Ctx): ComponentParts {
 
   // —— imports ——
   let imports = "";
+  if (meta.hasLoop) imports += `import { Fragment } from "react";\n`;
   imports += importCodeComponents(meta.codeComponents);
   for (const name of [...meta.modelComponents].sort()) {
     imports += `import { ${name} } from "./${name}";\n`;
@@ -380,7 +419,7 @@ function computeParts(comp: Component, ctx: Ctx): ComponentParts {
     needsProps,
     tree,
     node: comp,
-    renderTree: (node, indent = 4) => nodeToJsx(node, ctx, indent, false),
+    renderTree: (node, indent = 4) => nodeToJsx(node, ctx, indent, false, false),
   };
 }
 
@@ -415,10 +454,19 @@ function collect(node: Node, ctx: Ctx, out: Collected, inText: boolean): void {
   }
   if (node.type === "Slot") { out.hasSlot = true; return; }
 
+  // Loop is engine-handled (no component to import); its `data` prop is an
+  // expression and its children are the per-iteration template.
+  if (node.type === "Loop") {
+    out.hasLoop = true;
+    for (const v of Object.values(node.props)) if (typeof v === "string") out.exprs.push(v);
+    for (const c of node.children) collect(c, ctx, out, inText);
+    return;
+  }
+
   const cls = classify(node.type, ctx);
   let childInText = false;
   if (cls.kind === "instance") out.modelComponents.add(node.type);
-  else if (cls.kind === "code") out.codeComponents.set(node.type, cls.spec);
+  else if (cls.kind === "code") out.codeComponents.set(localNameFor(node.type, cls.spec, ctx), cls.spec);
   else {
     // The reserved `Custom` wrapper (div / View).
     out.hostTags.add(ctx.p.wrapperTag);
@@ -439,7 +487,7 @@ function collect(node: Node, ctx: Ctx, out: Collected, inText: boolean): void {
  * Render a model node to JSX at `indent` spaces. `inText` is whether the parent
  * already renders text (so a string child needs no `<Text>` wrapper on RN).
  */
-function nodeToJsx(node: Node, ctx: Ctx, indent: number, inText: boolean): string {
+function nodeToJsx(node: Node, ctx: Ctx, indent: number, inText: boolean, inLoop: boolean): string {
   const pad = " ".repeat(indent);
   const { p } = ctx;
 
@@ -453,9 +501,64 @@ function nodeToJsx(node: Node, ctx: Ctx, indent: number, inText: boolean): strin
   // Slot placeholder → render the passed children.
   if (node.type === "Slot") return `${pad}{$props.children}`;
 
+  // Loop → `data.map(...)`, the children rendered once per element with the
+  // element bound under `$loop.<name>` (`.current` / `.index` / `.all`) —
+  // mirroring the canvas runtime (NodeWrapper). The enclosing `$loop` env is
+  // passed INTO the IIFE (`{}` at the top level) so the shadowing `const $loop`
+  // inside the callback can extend it without a TDZ self-reference.
+  if (node.type === "Loop") {
+    const dataExpr =
+      typeof node.props.data === "string" ? node.props.data : JSON.stringify(node.props.data ?? []);
+    const name = typeof node.props.name === "string" && node.props.name ? node.props.name : "item";
+    const kids = node.children
+      .map((c) => nodeToJsx(c, ctx, indent + 6, inText, true))
+      .join("\n");
+    // Bind `$loop` only when the template actually reads it, so the output
+    // passes a strict (noUnused*) typecheck in the consuming app.
+    if (loopVarNeeded(node.children)) {
+      return (
+        `${pad}{((__data: unknown, __outer: Record<string, any>) =>\n` +
+        `${pad}  (Array.isArray(__data) ? __data : []).map((current: any, index: number, all: any[]) => {\n` +
+        `${pad}    const $loop: Record<string, any> = { ...__outer, ${JSON.stringify(name)}: { current, index, all } };\n` +
+        `${pad}    return (\n` +
+        `${pad}      <Fragment key={index}>\n` +
+        `${kids}\n` +
+        `${pad}      </Fragment>\n` +
+        `${pad}    );\n` +
+        `${pad}  }))(${dataExpr}, ${inLoop ? "$loop" : "{}"})}`
+      );
+    }
+    return (
+      `${pad}{((__data: unknown) =>\n` +
+      `${pad}  (Array.isArray(__data) ? __data : []).map((_current: any, index: number) => (\n` +
+      `${pad}    <Fragment key={index}>\n` +
+      `${kids}\n` +
+      `${pad}    </Fragment>\n` +
+      `${pad}  )))(${dataExpr})}`
+    );
+  }
+
+  // `hidden` mirrors the runtime (resolveProps): a truthy value renders nothing.
+  // Emitted as a conditional rather than passed through — as a DOM attribute any
+  // CSS display rule on the component would beat the UA [hidden] rule.
+  if (node.props.hidden !== undefined && !node.variants) {
+    const cond =
+      typeof node.props.hidden === "string" ? node.props.hidden : JSON.stringify(node.props.hidden);
+    const rest: Exclude<Node, string> = {
+      ...node,
+      props: Object.fromEntries(Object.entries(node.props).filter(([k]) => k !== "hidden")),
+    };
+    const inner = nodeToJsx(rest, ctx, indent + 2, inText, inLoop);
+    return `${pad}{!(${cond}) && (\n${inner}\n${pad})}`;
+  }
+
   const cls = classify(node.type, ctx);
   const isWrapper = cls.kind === "wrapper";
-  const tag = isWrapper ? p.wrapperTag : node.type;
+  const tag = isWrapper
+    ? p.wrapperTag
+    : cls.kind === "code"
+      ? localNameFor(node.type, cls.spec, ctx)
+      : node.type;
   const childInText = isWrapper ? p.wrapperHoldsText : false;
 
   const attrs = node.variants ? variantAttrs(node, p) : propsToJsx(node.props, p);
@@ -465,9 +568,25 @@ function nodeToJsx(node: Node, ctx: Ctx, indent: number, inText: boolean): strin
     return `${pad}<${open} />`;
   }
   const kids = node.children
-    .map((c) => nodeToJsx(c, ctx, indent + 2, childInText))
+    .map((c) => nodeToJsx(c, ctx, indent + 2, childInText, inLoop))
     .join("\n");
   return `${pad}<${open}>\n${kids}\n${pad}</${tag}>`;
+}
+
+/**
+ * Whether a loop's template (or a nested loop under it) reads `$loop` — i.e.
+ * any string prop expression in the subtree mentions it. Decides whether the
+ * emitted map callback declares the `$loop` binding.
+ */
+function loopVarNeeded(children: Node[]): boolean {
+  return children.some((c) => {
+    if (typeof c === "string") return false;
+    const inProps = (props: Record<string, unknown>) =>
+      Object.values(props).some((v) => typeof v === "string" && v.includes("$loop"));
+    if (inProps(c.props)) return true;
+    if (Object.values(c.variants ?? {}).some(inProps)) return true;
+    return loopVarNeeded(c.children);
+  });
 }
 
 /** Variant node: spread the active-variant-merged props (`applyVariant(...)`). */

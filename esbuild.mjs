@@ -18,7 +18,7 @@ const entryPoints = [
   { in: "src/react/main.tsx", out: "react/main" },
   { in: "src/generate/index.ts", out: "generate/index" },
   { in: "src/generate/codegen.ts", out: "generate/codegen" },
-  { in: "src/react/react-web.ts", out: "react/react-web" }, // runtime for generated code
+  { in: "src/react/EnvProvider.tsx", out: "react/EnvProvider" }, // runtime for generated code (the `./react-web` export)
   { in: "src/generate/cli.ts", out: "generate/cli" }, // the `cnstudio` bin
   { in: "src/engine/index.ts", out: "engine/index" },
 ];

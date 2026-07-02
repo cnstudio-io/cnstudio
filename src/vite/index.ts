@@ -65,7 +65,7 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
   // Example `$ctx` for the canvas (`.studio/dev-context.json`): realistic data so
   // components that read `$ctx` (e.g. a `$ctx.supabase`-driven login form) render
   // while editing. Injected into the canvas host as `window.__CNSTUDIO_DEVCTX__`
-  // and provided via `<DataProvider>` by the runtime. Optional; `{}` when absent.
+  // and provided via `<EnvProvider>` by the runtime. Optional; `{}` when absent.
   const devContextPath = () => join(root, studioDir, "dev-context.json");
   const readDevContext = (): Record<string, unknown> =>
     existsSync(devContextPath()) ? JSON.parse(readFileSync(devContextPath(), "utf8")) : {};
@@ -164,14 +164,15 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
       if (id === resolved(V_REGISTRY)) {
         const reg = readRegistry();
         const entries = Object.entries(reg.components);
-        // Keyed by the EXPORT NAME (node.type), not the registry id. Same-named
-        // components from different files collide here (last wins at render time);
-        // both are kept in registry.json for the extension's library tree.
+        // Keyed by the REGISTRY ID (`@/module#Export`) — the qualified form a
+        // node's `type` uses to address a code component. Bare names are the
+        // design's own namespace (custom components + built-in primitives), so
+        // same-named exports from different files never collide here.
         const body = entries
-          .map(([, m]) => {
+          .map(([id, m]) => {
             const pick = m.import.default ? "m.default" : `m[${JSON.stringify(m.import.name)}]`;
             const loader = `() => import(${JSON.stringify(m.import.module)}).then((m) => ({ default: ${pick} }))`;
-            return `  ${JSON.stringify(m.import.name)}: { component: L(${loader}), props: ${JSON.stringify(m.props)} }`;
+            return `  ${JSON.stringify(id)}: { component: L(${loader}), props: ${JSON.stringify(m.props)} }`;
           })
           .join(",\n");
         return (
@@ -240,7 +241,9 @@ export function cnstudio(options: CnstudioOptions = {}): Plugin {
             res.end(JSON.stringify({ name, props: primitiveSchemas[name] }));
             return;
           }
-          void componentProps(name).then((props) => {
+          // A qualified id (`@/module#Export`) extracts by its export name — the
+          // TS extraction resolves the file itself.
+          void componentProps(name.includes("#") ? name.split("#").pop()! : name).then((props) => {
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ name, props }));
           });

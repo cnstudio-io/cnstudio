@@ -6,8 +6,7 @@ import {
   type Node,
   type NodePath,
 } from "../engine/model";
-import { evalAction, resolveValue, type Env } from "./expr";
-import { EnvContext } from "./EnvProvider";
+import { evalAction, resolveValue, type Env, EnvContext } from "./EnvProvider";
 import { RenderContext } from "./RenderContext";
 import { NodeComponent } from "./NodeComponent";
 
@@ -21,7 +20,10 @@ import { NodeComponent } from "./NodeComponent";
 
 const MAX_RENDER_DEPTH = 50;
 
-/** Props on {@link NodeWrapper} — the varying per-node render state. */
+/** Props on {@link NodeWrapper} — the varying per-node render state. Extra keys
+ * are SLOTTED props: a composition parent (radix `Slot` via `asChild`) clones
+ * this element merging its own className/handlers/ref onto it, and the wrapper
+ * forwards them to the node it renders so composition works through the canvas. */
 interface NodeWrapperProps {
   node: Node;
   /** This node's `data-spath` path, or null (untagged / frozen subtree). */
@@ -36,6 +38,19 @@ interface NodeWrapperProps {
   slots: Record<string, Node[]> | undefined;
   /** Recursion depth (bounds runaway instance recursion). */
   depth: number;
+  [slotted: string]: unknown;
+}
+
+/** Merge slotted props (see {@link NodeWrapperProps}) into a node's resolved
+ * props — the slot's className is appended, everything else overrides. */
+function mergeSlotted(
+  props: Record<string, unknown>,
+  rest: Record<string, unknown>
+): void {
+  if (!Object.keys(rest).length) return;
+  const cls = [props.className, rest.className].filter(Boolean).join(" ");
+  Object.assign(props, rest);
+  if (cls) props.className = cls;
 }
 
 /**
@@ -63,7 +78,7 @@ function resolveProps(
 }
 
 export function NodeWrapper(props: NodeWrapperProps): ReactNode {
-  const { node, tagPath, freeze, activeVariant, slot, slots, depth } = props;
+  const { node, tagPath, freeze, activeVariant, slot, slots, depth, ...rest } = props;
   const rc = useContext(RenderContext);
   // The data-binding env ($props/$ctx). Reactivity is plain React: $props flows
   // from parents, $ctx from providers (EnvContext) — both re-render naturally.
@@ -140,6 +155,7 @@ export function NodeWrapper(props: NodeWrapperProps): ReactNode {
     const childTag = (i: number): NodePath | null =>
       freeze || tagPath === null ? null : [...tagPath, i];
     const kids = node.children.map((c, i) => childWrapper(c, i, childTag(i)));
+    mergeSlotted(cprops, rest);
     const inner = createElement(code, cprops, ...kids);
     if (tagPath === null) return inner;
     // Inject the selection attributes onto the component's OWN root element instead
@@ -215,5 +231,6 @@ export function NodeWrapper(props: NodeWrapperProps): ReactNode {
   const childTag = (i: number): NodePath | null =>
     freeze || tagPath === null ? null : [...tagPath, i];
   const kids = node.children.map((c, i) => childWrapper(c, i, childTag(i)));
+  mergeSlotted(dom, rest);
   return createElement("div", dom, ...kids);
 }
