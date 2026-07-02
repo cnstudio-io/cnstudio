@@ -125,8 +125,13 @@ export function mount(el: HTMLElement) {
     "wheel",
     (e) => {
       if (interactive) return;
+      // Plain scroll stays NATIVE: the artboard is viewport-sized (not
+      // content-sized), so the content itself must scroll inside the iframe.
+      // Only zoom gestures (ctrl/⌘ — trackpad pinch included) are the studio's;
+      // the grey backdrop around the artboard still pans in the webview.
+      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      post({ type: "wheel", rev: lastRev, deltaX: e.deltaX, deltaY: e.deltaY, x: e.clientX, y: e.clientY, ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
+      post({ type: "wheel", rev: lastRev, deltaX: e.deltaX, deltaY: e.deltaY, x: e.clientX, y: e.clientY, ctrl: true, shift: e.shiftKey });
     },
     { passive: false }
   );
