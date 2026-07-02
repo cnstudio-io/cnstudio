@@ -128,10 +128,13 @@ export { DomElement, HorizontalStack, VerticalStack } from "../primitives";
  * reserved `slot` prop on an instance's children: codegen emits each named
  * `Slot` marker as `{pickSlot($props.children, "name")}` and the fills as JSX
  * children carrying `slot="name"`. This picks the children whose `slot`
- * matches (`""` = the default slot: children with no `slot`), stripping the
- * routing prop so it never reaches the DOM.
+ * matches (`""` = children with no routing prop), stripping the routing prop
+ * so it never reaches the DOM. `routeTo` is slot FORWARDING: a marker that is
+ * itself a fill of an inner instance (`{ type: "Slot", props: { name, slot } }`)
+ * re-tags the picked children with `slot={routeTo}` instead of stripping, so
+ * the inner component's own filter routes them onward.
  */
-export function pickSlot(children: ReactNode, name: string): ReactNode {
+export function pickSlot(children: ReactNode, name: string, routeTo?: string): ReactNode {
   const slotOf = (c: ReactNode): string => {
     if (!isValidElement(c)) return "";
     const s = (c.props as Record<string, unknown>).slot;
@@ -140,8 +143,8 @@ export function pickSlot(children: ReactNode, name: string): ReactNode {
   return Children.toArray(children)
     .filter((c) => slotOf(c) === name)
     .map((c) =>
-      isValidElement(c) && (c.props as Record<string, unknown>).slot !== undefined
-        ? cloneElement(c as ReactElement<{ slot?: string }>, { slot: undefined })
+      isValidElement(c) && ((c.props as Record<string, unknown>).slot !== undefined || routeTo !== undefined)
+        ? cloneElement(c as ReactElement<{ slot?: string }>, { slot: routeTo })
         : c
     );
 }

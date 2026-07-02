@@ -516,12 +516,17 @@ function nodeToJsx(node: Node, ctx: Ctx, indent: number, inText: boolean, inLoop
 
   // Slot placeholder → render the passed children. A component with any NAMED
   // marker routes: each marker filters `$props.children` by the reserved `slot`
-  // prop via `pickSlot` (`""` = the default slot). With only the unnamed marker
-  // the children pass through whole, as before.
+  // prop via `pickSlot` (`""` = children with no routing prop). With only
+  // unnamed markers the children pass through whole, as before. A marker that
+  // is itself a fill of an inner instance (it carries its own `slot` routing
+  // prop) FORWARDS: the picked children are re-tagged with that routing prop so
+  // the inner component's filter routes them onward.
   if (node.type === "Slot") {
     if (!ctx.namedSlots) return `${pad}{$props.children}`;
     const name = typeof node.props.name === "string" ? node.props.name : "";
-    return `${pad}{pickSlot($props.children, ${JSON.stringify(name)})}`;
+    const routeTo = typeof node.props.slot === "string" ? node.props.slot : undefined;
+    const route = routeTo === undefined ? "" : `, ${JSON.stringify(routeTo)}`;
+    return `${pad}{pickSlot($props.children, ${JSON.stringify(name)}${route})}`;
   }
 
   // Loop → `data.map(...)`, the children rendered once per element with the

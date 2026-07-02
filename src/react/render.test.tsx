@@ -189,6 +189,47 @@ describe("slot forwarding (lexical fills)", () => {
   it("resolves a fill's expressions against the component that authored it", () => {
     expect(html).toContain('data-from="wrap-scope"');
   });
+
+  it("forwards across NAMED slots (a marker that declares one name and fills another)", () => {
+    const named: Site = {
+      components: [
+        {
+          name: "Inner",
+          type: "Box",
+          props: {},
+          children: [{ type: "Slot", props: { name: "header" }, children: ["inner-empty"] }],
+        },
+        {
+          // Wrap declares slot "page" and forwards it into Inner's "header".
+          name: "Wrap",
+          type: "Custom",
+          props: {},
+          children: [
+            {
+              type: "Inner",
+              props: {},
+              children: [{ type: "Slot", props: { name: "page", slot: "header" }, children: [] }],
+            },
+          ],
+        },
+        {
+          name: "Page",
+          type: "Custom",
+          props: {},
+          children: [
+            {
+              type: "Wrap",
+              props: {},
+              children: [{ type: "Box", props: { slot: "page" }, children: ["routed-through"] }],
+            },
+          ],
+        },
+      ],
+    };
+    const out = markup(named.components[2], named, { resolveCode });
+    expect(out).toContain("routed-through");
+    expect(out).not.toContain("inner-empty");
+  });
 });
 
 describe("loop", () => {

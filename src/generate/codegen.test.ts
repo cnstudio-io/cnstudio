@@ -111,7 +111,33 @@ describe("named slots", () => {
     expect(page.content).toContain('slot={"header"}');
   });
 
-  it("keeps the plain children passthrough for a default-slot-only component", () => {
+  it("emits a forwarding marker (a fill that is itself a Slot) with its reroute target", () => {
+    // Wrap declares slot "page" and forwards it into Shell's "header" slot: the
+    // marker is a fill (slot: "header") and a declaration (name: "page") at once.
+    const forwarding: Site = {
+      components: [
+        slotted.components[0], // Shell (declares "header" + an unnamed marker)
+        {
+          name: "Wrap",
+          type: "Custom",
+          props: {},
+          children: [
+            {
+              type: "Shell",
+              props: {},
+              children: [{ type: "Slot", props: { name: "page", slot: "header" }, children: [] }],
+            },
+          ],
+        },
+      ],
+    };
+    const wrap = web({ out: "./d" })
+      .generate(forwarding, { root: "/x", registry })
+      .find((f) => f.path === "Wrap.tsx")!;
+    expect(wrap.content).toContain('{pickSlot($props.children, "page", "header")}');
+  });
+
+  it("keeps the plain children passthrough for a component with only unnamed markers", () => {
     const [file] = web({ out: "./d" }).generate(site, { root: "/x", registry });
     expect(file.content).toContain("{$props.children}");
     expect(file.content).not.toContain("pickSlot");
